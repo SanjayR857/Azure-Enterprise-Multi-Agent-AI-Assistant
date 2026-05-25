@@ -1,9 +1,17 @@
-from app.services.llm_service import llm_service
+from fastapi import FastAPI
+
+from app.api.routes.chat import router as chat_router
+from app.api.routes.health import router as health_router
+
+app = FastAPI(
+    title="Enterprise Multi-Agent AI Assistant",
+    version="0.0.1",
+)
+
+app.include_router(chat_router)
+app.include_router(health_router)
 
 if __name__ == "__main__":
-    try:
-        query = input("Please enter your query: ")
-        print(llm_service.chat(query))
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
+    import uvicorn
+    uvicorn.run(app, host="localhost", port=8000)
+    
