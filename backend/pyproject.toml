@@ -1,7 +1,7 @@
 [project]
-name = "enterprise-multi-agent-ai-assistant"
+name = "enterprise-multi-agent-ai-assistant-backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "Backend service for Enterprise Multi-Agent AI Assistant"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
