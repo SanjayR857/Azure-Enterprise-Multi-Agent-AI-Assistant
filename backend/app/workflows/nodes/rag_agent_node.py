@@ -7,7 +7,8 @@ from app.services.llm_service import llm_service
 
 def rag_agent_node(state):
 
-    question = state["messages"][-1].content
+    messages = state["messages"]
+    question = messages[-1].content
 
     docs = retrieve_documents(question)
 
@@ -15,13 +16,22 @@ def rag_agent_node(state):
         [doc.page_content for doc in docs]
     )
 
-    prompt = f"""
-    Answer using the provided context.
+    # Format conversation history
+    history_lines = []
+    for msg in messages[:-1]:
+        role = "User" if msg.type == "human" else "Assistant"
+        history_lines.append(f"{role}: {msg.content}")
+    conversation_history = "\n".join(history_lines)
+
+    prompt = f"""You are a helpful assistant. Answer the latest user question using the provided context and conversation history.
 
     Context:
     {context}
 
-    Question:
+    Recent Conversation History:
+    {conversation_history}
+
+    Latest User Question:
     {question}
     """
 
