@@ -8,7 +8,6 @@ def approval_node(state):
         }
     )
 
-
     return {
         "approved": approval
     }
