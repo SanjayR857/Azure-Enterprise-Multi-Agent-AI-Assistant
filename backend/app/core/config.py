@@ -10,9 +10,15 @@ load_dotenv(dotenv_path=env_path)
 
 
 class Settings(BaseSettings):
+
+    # OLLAMA ENDPOINTS 
     OLLAMA_API_KEY: str | None = None
     OLLAMA_MODEL: str = "gemma4:31b-cloud"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
+
+    # EMBDING MODELS
+    OLLAMA_EMBDING_MODEL: str =  os.getenv("OLLAMA_EMBDING_MODEL")
+
 
     # Generation defaults
     OLLAMA_TEMPERATURE: float = 0.0

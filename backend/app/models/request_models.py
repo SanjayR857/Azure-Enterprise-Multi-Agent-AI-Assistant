@@ -6,4 +6,3 @@ class ChatRequest(BaseModel):
 
 class AgentRequest(BaseModel):
     message: str
-    enable_search: bool = True

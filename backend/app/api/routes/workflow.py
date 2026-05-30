@@ -1,21 +1,20 @@
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter
-
-from app.models.request_models import AgentRequest
+from app.services.workflow_service import workflow_service
 from app.models.response_models import AgentResponse
-from app.services.agent_service import agent_service
+from app.models.request_models import AgentRequest
 from app.utils import count_tokens
 
 router = APIRouter(
-    prefix="/api",
-    tags=["agents"],
+    prefix="/workflow",
+    tags=["workflow"],
 )
 
 
-@router.post("/agent", response_model=AgentResponse)
-async def agent(request: AgentRequest):
-
-    response = agent_service.run(request.message)
+@router.post("/",response_model=AgentResponse)
+async def run_workflow(request:AgentRequest):
+    
+    response = workflow_service.run(request.message)
     
     input_tokens = count_tokens(request.message)
     output_tokens = count_tokens(response)
