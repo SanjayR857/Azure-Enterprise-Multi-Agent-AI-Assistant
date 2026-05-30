@@ -10,6 +10,8 @@ from app.workflows.nodes.chatbot_agent_node import chatbot_agent_node
 from app.workflows.nodes.research_agent_node import research_agent_node
 from app.workflows.nodes.sql_agent_node import sql_agent_node
 
+from app.memory.conversation_memory import memory
+
 class GraphBuilder:
 
     def __init__(self):
@@ -52,7 +54,9 @@ class GraphBuilder:
         self.graph_builder.add_edge("rag_agent",END)
         
         # complier 
-        graph = self.graph_builder.compile()
+        graph = self.graph_builder.compile(
+            checkpointer=memory
+        )
 
         return graph
 

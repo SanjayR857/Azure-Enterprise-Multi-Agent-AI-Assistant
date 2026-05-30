@@ -23,3 +23,4 @@ langchain-chroma>=1.1.0  # Chroma vector database integration for LangChain
 pypdf>=0.1.7  # Pure-Python PDF library capable of splitting, merging, and extracting data
 chromadb>=1.5.9  # Open-source AI application database/vector database for embeddings
 botocore>=1.43.18  # Low-level SDK interface to Amazon Web Services (AWS) services
+langgraph-checkpoint>=0.4.0  # Checkpointing for LangGraph to persist state

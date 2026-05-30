@@ -7,9 +7,7 @@ from app.services.llm_service import llm_service
 
 def chatbot_agent_node(state):
 
-    question = state["messages"][-1].content
-
-    answer = llm_service.chat(question)
+    answer = llm_service.chat(state["messages"])
 
     return {
         "messages": [

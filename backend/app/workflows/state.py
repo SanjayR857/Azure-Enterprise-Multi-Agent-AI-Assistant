@@ -10,4 +10,5 @@ class AgentState(TypedDict):
     router: str
     next_agent: str 
 
-    
+    requires_approval: bool
+    approved: bool

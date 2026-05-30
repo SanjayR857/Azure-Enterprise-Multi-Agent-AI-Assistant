@@ -4,12 +4,23 @@ from langchain.messages import AIMessage
 
 def supervisor_node(state):
 
-    user_message = state["messages"][-1].content
+    messages = state["messages"]
+    user_message = messages[-1].content
     
+    # Format conversation history
+    history_lines = []
+    for msg in messages[:-1]:
+        role = "User" if msg.type == "human" else "Assistant"
+        history_lines.append(f"{role}: {msg.content}")
+    conversation_history = "\n".join(history_lines)
+
     prompt = f"""
     {SUPERVISOR_PROMPT}
 
-    User Request:
+    Recent Conversation History:
+    {conversation_history}
+
+    Latest User Request:
     {user_message}
     """
 
