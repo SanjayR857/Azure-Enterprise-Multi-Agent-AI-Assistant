@@ -8,4 +8,6 @@ class AgentState(TypedDict):
 
     messages: Annotated[list, add_messages]
     router: str
+    next_agent: str 
+
     

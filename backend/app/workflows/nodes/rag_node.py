@@ -5,7 +5,7 @@ from app.rag.retriever import retrieve_documents
 from app.services.llm_service import llm_service
 
 
-def rag_node(state):
+def rag_agent_node(state):
 
     question = state["messages"][-1].content
 

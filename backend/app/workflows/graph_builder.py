@@ -4,11 +4,15 @@ from langgraph.graph import START,END
 from app.workflows.state import AgentState
 
 from app.workflows.nodes.chatbot_node import chatbot_node
-from app.workflows.nodes.rag_node import rag_node
+from app.workflows.nodes.rag_node import rag_agent_node
 from app.workflows.nodes.tool_node import tool_node
 from app.workflows.nodes.router_node import router_node
-
 from app.workflows.nodes.route_decision import route_decision
+from app.workflows.nodes.supervisor_node import supervisor_node
+from app.workflows.nodes.supervisor_router import supervisor_router
+from app.workflows.nodes.chatbot_agent_node import chatbot_agent_node
+from app.workflows.nodes.research_agent_node import research_agent_node
+from app.workflows.nodes.sql_agent_node import sql_agent_node
 
 class GraphBuilder:
 
@@ -19,31 +23,37 @@ class GraphBuilder:
     
     def builder(self):
 
-        self.graph_builder.add_node("router", router_node)
+        self.graph_builder.add_node("supervisor", supervisor_node)
+        
+        self.graph_builder.add_node("chatbot_agent",chatbot_agent_node)
 
-        self.graph_builder.add_node("chatbot",chatbot_node)
+        self.graph_builder.add_node("research_agent", research_agent_node)
 
-        self.graph_builder.add_node("tool", tool_node)
+        self.graph_builder.add_node("sql_agent", sql_agent_node)
 
-        self.graph_builder.add_node("rag", rag_node)
+        self.graph_builder.add_node("rag_agent", rag_agent_node)
 
-        self.graph_builder.add_edge(START,"router")
+
+        self.graph_builder.add_edge(START,"supervisor")
 
         self.graph_builder.add_conditional_edges(
-            "router",
-            route_decision,
+            "supervisor",
+            supervisor_router,
             {
-                "chatbot": "chatbot",
-                "tool": "tool",
-                "rag": "rag"
+                "chatbot_agent": "chatbot_agent",
+                "research_agent": "research_agent",
+                "sql_agent": "sql_agent",
+                "rag_agent": "rag_agent"
             }
         )
 
-        self.graph_builder.add_edge("chatbot",END)
+        self.graph_builder.add_edge("chatbot_agent",END)
 
-        self.graph_builder.add_edge("tool",END)
+        self.graph_builder.add_edge("research_agent",END)
 
-        self.graph_builder.add_edge("rag",END)
+        self.graph_builder.add_edge("sql_agent",END)
+        
+        self.graph_builder.add_edge("rag_agent",END)
         
         # complier 
         graph = self.graph_builder.compile()
