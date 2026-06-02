@@ -9,16 +9,22 @@ class WorkflowService:
 
     def run(self, message: str):
         
-        thread_id = "user_123"
 
         response = graph.invoke(
         {
             "messages": [HumanMessage(content=message)]
-        },
-        config={"configurable": 
-            {"thread_id": thread_id}}   
+        }
         )
-
+        
+        if response.get("final_response"):
+            return response["final_response"]
+        elif response.get("sql_result"):
+            return response["sql_result"]
+        elif response.get("rag_result"):
+            return response["rag_result"]
+        elif response.get("research_result"):
+            return response["research_result"]
+        
         return response["messages"][-1].content
 
 workflow_service = WorkflowService()
