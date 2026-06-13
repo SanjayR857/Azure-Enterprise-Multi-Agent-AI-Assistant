@@ -1,7 +1,6 @@
 from app.prompts.agent_prompts import SUPERVISOR_PROMPT
-from app.services.llm_service import llm_service
 
-from app.services.llm_service import llm_service
+from app.services.agent_service import agent_service
 
 def report_agent_node(state):
 
@@ -30,7 +29,7 @@ Provide:
 3. Recommendations
 """
 
-    report = llm_service.chat(prompt)
+    report = agent_service.run_chat(prompt)
 
     return {
         "final_response": report

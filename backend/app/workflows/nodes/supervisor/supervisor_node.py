@@ -1,4 +1,4 @@
-from app.services.llm_service import llm_service
+from app.services.agent_service import agent_service
 from app.prompts.agent_prompts import SUPERVISOR_PROMPT
 from langchain.messages import AIMessage
 
@@ -13,7 +13,7 @@ def supervisor_node(state):
     {user_message}
     """
 
-    response = llm_service.chat(prompt)
+    response = agent_service.run_chat(prompt)
     next_agent = response.strip()
 
     return {
