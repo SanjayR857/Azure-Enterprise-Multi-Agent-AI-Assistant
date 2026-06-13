@@ -9,9 +9,26 @@ from app.api.routes.agents import router as agent_router
 from app.api.routes.workflow import router as workflow_router
 from app.api.routes.rag import router as rag_router
 
+import sys
+from contextlib import asynccontextmanager
+from app.services.mcp_service import mcp_service
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+
+    # Register MCP servers (process-based))
+    mcp_service.register_server(
+        "filesystem",
+        [sys.executable, "app/mcp/servers/filesystem_mcp_server.py"]
+    )
+
+    await mcp_service.connect_all()
+    yield
+
 app = FastAPI(
     title="Enterprise Multi-Agent AI Assistant",
     version="0.0.1",
+    lifespan=lifespan
 )
 
 # Enable CORS for frontend UI connection
@@ -29,6 +46,7 @@ app.include_router(health_router)
 app.include_router(agent_router)
 app.include_router(workflow_router)
 app.include_router(rag_router)
+
 
 
 if __name__ == "__main__":

@@ -9,7 +9,6 @@ class WorkflowService:
 
     def run(self, message: str):
         
-
         response = graph.invoke(
         {
             "messages": [HumanMessage(content=message)]
@@ -26,5 +25,6 @@ class WorkflowService:
             return response["research_result"]
         
         return response["messages"][-1].content
+
 
 workflow_service = WorkflowService()

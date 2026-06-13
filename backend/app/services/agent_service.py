@@ -2,10 +2,10 @@ from langchain_core.messages import HumanMessage
 from langchain.agents import create_agent
 from langchain_ollama import ChatOllama
 
-from app.tools.calculator.calculator_tool import calculator
-from app.tools.web_search.tavily_search import web_search
+from app.mcp.tools.calculator_tool import calculator
+from app.mcp.tools.filesystem_tools import list_project_files
+from app.mcp.tools.tavily_search import web_search
 from app.core.config import settings
-from app.services.llm_service import LLMService
 from app.prompts.system_prompts import AGENT_SYSTEM_PROMPT
 
 # Agent Service
@@ -30,21 +30,11 @@ class AgentService:
         self.llm = model
 
         # Pre-initialize agent with web search
-        self.agent_with_search = create_agent(
-            tools=[calculator, web_search],
+        self.agent = create_agent(
+            tools=[calculator, web_search, list_project_files],
             model=self.llm,
             system_prompt=AGENT_SYSTEM_PROMPT
         )
-
-        # Pre-initialize agent without web search
-        self.agent_without_search = create_agent(
-            tools=[calculator],
-            model=self.llm,
-            system_prompt=AGENT_SYSTEM_PROMPT
-        )
-
-        # Retain self.agent for backward compatibility
-        self.agent = self.agent_with_search
 
     # Run Agent
     def run(self, prompt: str) -> str:

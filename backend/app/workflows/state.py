@@ -14,8 +14,4 @@ class AgentState(TypedDict):
     sql_result: str
 
     final_response: str
-
-    # email 
-    
-    # requires_approval: bool
-    # approved: bool
+

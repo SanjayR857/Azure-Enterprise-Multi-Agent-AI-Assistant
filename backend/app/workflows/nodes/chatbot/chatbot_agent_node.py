@@ -1,13 +1,11 @@
-# app/workflows/nodes/chatbot_agent_node.py
-
 from langchain_core.messages import AIMessage
-
-from app.services.llm_service import llm_service
+from app.services.agent_service import agent_service
 
 
 def chatbot_agent_node(state):
 
-    answer = llm_service.chat(state["messages"])
+    user_message = state["messages"][-1].content
+    answer = agent_service.run(user_message)
 
     return {
         "messages": [
