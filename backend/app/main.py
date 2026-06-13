@@ -3,16 +3,18 @@ from fastapi import FastAPI
 # pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes.chat import router as chat_router
-from app.api.routes.health import router as health_router
-from app.api.routes.agents import router as agent_router
-from app.api.routes.workflow import router as workflow_router
-from app.api.routes.rag import router as rag_router
+from app.api.api_router import api_router
 
 import sys
 from contextlib import asynccontextmanager
 from app.services.mcp_service import mcp_service
 
+"""
+MCP servers run as separate processes.
+We must use spawn to start them (child processes inherit handles differently).
+`sys.executable` ensures we use the same Python interpreter.
+`asynccontextmanager` ensures MCP connections persist for the app lifecycle.
+"""
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
@@ -41,12 +43,7 @@ app.add_middleware(
 )
 
 
-app.include_router(chat_router)
-app.include_router(health_router)
-app.include_router(agent_router)
-app.include_router(workflow_router)
-app.include_router(rag_router)
-
+app.include_router(api_router)
 
 
 if __name__ == "__main__":

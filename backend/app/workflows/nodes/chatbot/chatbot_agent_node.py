@@ -5,7 +5,7 @@ from app.services.agent_service import agent_service
 def chatbot_agent_node(state):
 
     user_message = state["messages"][-1].content
-    answer = agent_service.run(user_message)
+    answer = agent_service.run_chat(user_message)
 
     return {
         "messages": [

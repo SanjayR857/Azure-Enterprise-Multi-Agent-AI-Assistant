@@ -9,7 +9,7 @@ def research_agent_node(state):
 
     question = state["messages"][-1].content
 
-    result = agent_service.run(question)
+    result = agent_service.run_agent(question)
 
     return {
         "research_result": result

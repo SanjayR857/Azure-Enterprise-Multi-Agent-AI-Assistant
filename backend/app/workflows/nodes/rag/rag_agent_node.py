@@ -2,7 +2,8 @@ from langchain_core.messages import content
 from langchain_core.messages import AIMessage
 
 from app.rag.retriever import retrieve_documents
-from app.services.llm_service import llm_service
+# pyrefly: ignore [missing-import]
+from app.services.agent_service import agent_service
 
 
 def rag_agent_node(state):
@@ -24,7 +25,7 @@ def rag_agent_node(state):
     {question}
     """
 
-    response = llm_service.chat(prompt)
+    response = agent_service.run_chat(prompt)
 
     return {
         "rag_result": response
