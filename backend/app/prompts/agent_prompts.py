@@ -20,4 +20,5 @@ Selected Agent Identifier (choose EXACTLY one of):
 research_agent
 rag_agent
 sql_agent
-chatbot_agent"""
+chatbot_agent
+"""

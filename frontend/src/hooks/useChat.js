@@ -1,0 +1,291 @@
+import { useState, useCallback, useRef } from 'react';
+
+const API_BASE = 'http://localhost:8000';
+
+/**
+ * Custom hook encapsulating all backend API communication
+ * for the chatbot frontend.
+ */
+export default function useChat() {
+  const [sessions, setSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [healthStatus, setHealthStatus] = useState('checking');
+  const [latency, setLatency] = useState(null);
+  const [error, setError] = useState(null);
+
+  // Track token usage across the session
+  const [tokenStats, setTokenStats] = useState({ totalInput: 0, totalOutput: 0, totalTokens: 0, requests: 0 });
+
+  const healthIntervalRef = useRef(null);
+
+  // ──────── HEALTH CHECK ────────
+  const checkHealth = useCallback(async () => {
+    const start = Date.now();
+    try {
+      const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+      const lat = Date.now() - start;
+      if (res.ok) {
+        setHealthStatus('online');
+        setLatency(lat);
+      } else {
+        setHealthStatus('offline');
+        setLatency(null);
+      }
+    } catch {
+      setHealthStatus('offline');
+      setLatency(null);
+    }
+  }, []);
+
+  const startHealthCheck = useCallback(() => {
+    checkHealth();
+    if (healthIntervalRef.current) clearInterval(healthIntervalRef.current);
+    healthIntervalRef.current = setInterval(checkHealth, 8000);
+    return () => clearInterval(healthIntervalRef.current);
+  }, [checkHealth]);
+
+  // ──────── LOAD ALL SESSIONS ────────
+  const loadSessions = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/conversation/all_sessions`);
+      if (!res.ok) throw new Error(`Failed to load sessions: ${res.status}`);
+      const data = await res.json();
+
+      // Transform the nested dict structure into an array
+      const sessionList = Object.entries(data.sessions || {}).map(([sessionId, messagesDict]) => {
+        const msgArray = Object.entries(messagesDict).map(([msgId, details]) => ({
+          id: msgId,
+          humanMessage: details.humanMessage,
+          aiMessage: details.aiMessage,
+          createdAt: details.createdAt,
+        }));
+        // Sort by createdAt
+        msgArray.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+        const firstMsg = msgArray[0];
+        const lastMsg = msgArray[msgArray.length - 1];
+
+        return {
+          id: sessionId,
+          title: firstMsg?.humanMessage?.substring(0, 60) || 'New Chat',
+          preview: lastMsg?.aiMessage?.substring(0, 80) || '',
+          messageCount: msgArray.length,
+          createdAt: firstMsg?.createdAt,
+          updatedAt: lastMsg?.createdAt,
+          messages: msgArray,
+        };
+      });
+
+      // Sort sessions by most recent
+      sessionList.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+      setSessions(sessionList);
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to load sessions:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // ──────── LOAD HISTORY FOR A SESSION ────────
+  const loadHistory = useCallback(async (sessionId) => {
+    setIsLoading(true);
+    setActiveSessionId(sessionId);
+    try {
+      const res = await fetch(`${API_BASE}/conversation/history/${sessionId}`);
+      if (!res.ok) throw new Error(`Failed to load history: ${res.status}`);
+      const data = await res.json();
+
+      const msgArray = Object.entries(data.messages || {}).map(([msgId, details]) => ({
+        id: msgId,
+        humanMessage: details.humanMessage,
+        aiMessage: details.aiMessage,
+        createdAt: details.createdAt,
+      }));
+
+      msgArray.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      setMessages(msgArray);
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to load history:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // ──────── SEND MESSAGE ────────
+  const sendMessage = useCallback(async (message, sessionId = null) => {
+    setIsSending(true);
+    setError(null);
+
+    // Optimistically add user message
+    const tempId = 'temp-' + Date.now();
+    const userMsg = {
+      id: tempId,
+      humanMessage: message,
+      aiMessage: null,
+      createdAt: new Date().toISOString(),
+      isPending: true,
+    };
+    setMessages(prev => [...prev, userMsg]);
+
+    try {
+      const body = { message };
+      if (sessionId) body.session_id = sessionId;
+
+      const res = await fetch(`${API_BASE}/conversation/agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
+
+      const returnedSessionId = data.session_id;
+
+      // Update the temporary message with the real response
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === tempId
+            ? {
+                ...m,
+                aiMessage: data.response,
+                isPending: false,
+                tokens: {
+                  input: data.input_token,
+                  output: data.output_token,
+                  total: data.total_token,
+                },
+              }
+            : m
+        )
+      );
+
+      // Update token stats
+      setTokenStats(prev => ({
+        totalInput: prev.totalInput + (data.input_token || 0),
+        totalOutput: prev.totalOutput + (data.output_token || 0),
+        totalTokens: prev.totalTokens + (data.total_token || 0),
+        requests: prev.requests + 1,
+      }));
+
+      // If new session was created, update active session ID
+      if (!sessionId && returnedSessionId) {
+        setActiveSessionId(returnedSessionId);
+      }
+
+      // Refresh sessions list to show the new/updated session
+      await loadSessions();
+
+      return { sessionId: returnedSessionId, response: data.response };
+    } catch (err) {
+      setError(err.message);
+      // Mark the message as errored
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === tempId
+            ? { ...m, aiMessage: `⚠️ **Error:** ${err.message}`, isPending: false, isError: true }
+            : m
+        )
+      );
+      return null;
+    } finally {
+      setIsSending(false);
+    }
+  }, [loadSessions]);
+
+  // ──────── DELETE SESSION ────────
+  const deleteSession = useCallback(async (sessionId) => {
+    try {
+      const res = await fetch(`${API_BASE}/conversation/session/${sessionId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`Failed to delete: ${res.status}`);
+
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+
+      if (activeSessionId === sessionId) {
+        setActiveSessionId(null);
+        setMessages([]);
+      }
+      return true;
+    } catch (err) {
+      setError(err.message);
+      return false;
+    }
+  }, [activeSessionId]);
+
+  // ──────── DELETE MESSAGE ────────
+  const deleteMessage = useCallback(async (messageId) => {
+    try {
+      const res = await fetch(`${API_BASE}/conversation/message/${messageId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`Failed to delete message: ${res.status}`);
+
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      return true;
+    } catch (err) {
+      setError(err.message);
+      return false;
+    }
+  }, []);
+
+  // ──────── UPDATE MESSAGE ────────
+  const updateMessage = useCallback(async (messageId, content, role = 'user') => {
+    try {
+      const body = role === 'user'
+        ? { humanMessage: content }
+        : { aiMessage: content };
+
+      const res = await fetch(`${API_BASE}/conversation/message/${messageId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) throw new Error(`Failed to update message: ${res.status}`);
+      return true;
+    } catch (err) {
+      setError(err.message);
+      return false;
+    }
+  }, []);
+
+  // ──────── START NEW CHAT ────────
+  const startNewChat = useCallback(() => {
+    setActiveSessionId(null);
+    setMessages([]);
+    setError(null);
+  }, []);
+
+  // ──────── CLEAR ERROR ────────
+  const clearError = useCallback(() => setError(null), []);
+
+  return {
+    // State
+    sessions,
+    activeSessionId,
+    messages,
+    isLoading,
+    isSending,
+    healthStatus,
+    latency,
+    error,
+    tokenStats,
+
+    // Actions
+    checkHealth,
+    startHealthCheck,
+    loadSessions,
+    loadHistory,
+    sendMessage,
+    deleteSession,
+    deleteMessage,
+    updateMessage,
+    startNewChat,
+    clearError,
+    setActiveSessionId,
+  };
+}
