@@ -33,6 +33,39 @@ export default function App() {
     return cleanup;
   }, [loadSessions, startHealthCheck]);
 
+  // Resizing logic
+  const isResizing = useRef(false);
+
+  const startResizing = React.useCallback(() => {
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  const stopResizing = React.useCallback(() => {
+    isResizing.current = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }, []);
+
+  const resize = React.useCallback((e) => {
+    if (isResizing.current) {
+      const newWidth = e.clientX;
+      if (newWidth >= 200 && newWidth <= 800) {
+        document.documentElement.style.setProperty('--sidebar-width', `${newWidth}px`);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('mousemove', resize);
+    window.addEventListener('mouseup', stopResizing);
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    };
+  }, [resize, stopResizing]);
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -53,6 +86,20 @@ export default function App() {
 
   return (
     <div className="app-layout">
+      {/* Floating toggle button — visible when sidebar is collapsed */}
+      <button
+        className={`sidebar-toggle-btn ${sidebarCollapsed ? 'visible' : ''}`}
+        onClick={() => setSidebarCollapsed(false)}
+        title="Open sidebar"
+        aria-label="Open sidebar"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
+
       <Sidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
@@ -65,6 +112,11 @@ export default function App() {
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
+
+      {/* Resizer Handle */}
+      {!sidebarCollapsed && (
+        <div className="sidebar-resizer" onMouseDown={startResizing} />
+      )}
 
       <main className="chat-main">
         {/* Background ambient decoration */}

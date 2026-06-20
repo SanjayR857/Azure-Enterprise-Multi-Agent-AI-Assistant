@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * Sidebar component — session list, new chat button, health status, token stats.
@@ -15,33 +16,46 @@ export default function Sidebar({
   isCollapsed,
   onToggleCollapse,
 }) {
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    const now = new Date();
-    const diff = now - d;
-    const mins = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
+  React.useEffect(() => {
+    const handleGlobalClick = () => setOpenMenuId(null);
+    if (openMenuId) {
+      window.addEventListener('click', handleGlobalClick);
+      window.addEventListener('resize', handleGlobalClick);
+    }
+    return () => {
+      window.removeEventListener('click', handleGlobalClick);
+      window.removeEventListener('resize', handleGlobalClick);
+    };
+  }, [openMenuId]);
 
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const handleMenuClick = (e, sessionId) => {
+    e.stopPropagation();
+    if (openMenuId === sessionId) {
+      setOpenMenuId(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setMenuPos({
+        top: rect.top,
+        left: rect.right + 8 // Pop out 8px to the right of the button
+      });
+      setOpenMenuId(sessionId);
+    }
   };
 
-  const handleDeleteClick = (e, sessionId) => {
+  const handleShareClick = (e, sessionId) => {
     e.stopPropagation();
-    if (deleteConfirm === sessionId) {
-      onDeleteSession(sessionId);
-      setDeleteConfirm(null);
-    } else {
-      setDeleteConfirm(sessionId);
-      setTimeout(() => setDeleteConfirm(null), 3000);
-    }
+    // Placeholder share functionality
+    console.log("Share session", sessionId);
+    setOpenMenuId(null);
+  };
+
+  const handleDeleteDropdownClick = (e, sessionId) => {
+    e.stopPropagation();
+    onDeleteSession(sessionId);
+    setOpenMenuId(null);
   };
 
   return (
@@ -74,32 +88,25 @@ export default function Sidebar({
         <button
           className="collapse-btn"
           onClick={onToggleCollapse}
-          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-label="Toggle sidebar"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            {isCollapsed ? (
-              <><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></>
-            ) : (
-              <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>
-            )}
+          title="Close sidebar"
+          aria-label="Close sidebar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
       </div>
 
       {/* New Chat Button */}
       <button className="new-chat-btn" onClick={onNewChat} id="new-chat-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
         <span>New Chat</span>
       </button>
 
       {/* Session List */}
       <div className="sessions-list">
         <div className="sessions-label">
-          <span>Recent Conversations</span>
+          <span>Recent History</span>
           <span className="session-count">{sessions.length}</span>
         </div>
 
@@ -109,7 +116,7 @@ export default function Sidebar({
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
             <p>No conversations yet</p>
-            <p className="hint">Start a new chat to begin</p>
+            <p className="hint">Start a new session to begin</p>
           </div>
         ) : (
           <div className="sessions-scroll">
@@ -120,29 +127,37 @@ export default function Sidebar({
                 onClick={() => onSelectSession(session.id)}
                 id={`session-${session.id}`}
               >
-                <div className="session-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                </div>
                 <div className="session-info">
                   <span className="session-title">{session.title}</span>
-                  <span className="session-preview">{session.preview || 'No messages yet'}</span>
                 </div>
                 <div className="session-actions">
-                  <span className="session-time">{formatDate(session.updatedAt)}</span>
-                  <button
-                    className={`session-delete-btn ${deleteConfirm === session.id ? 'confirm' : ''}`}
-                    onClick={(e) => handleDeleteClick(e, session.id)}
-                    title={deleteConfirm === session.id ? 'Click again to confirm' : 'Delete session'}
-                    aria-label="Delete session"
-                  >
-                    {deleteConfirm === session.id ? (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
-                    ) : (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      className={`session-menu-btn ${openMenuId === session.id ? 'active' : ''}`}
+                      onClick={(e) => handleMenuClick(e, session.id)}
+                      title="Menu options"
+                      aria-label="Menu options"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                        <circle cx="12" cy="12" r="2" />
+                        <circle cx="12" cy="5" r="2" />
+                        <circle cx="12" cy="19" r="2" />
+                      </svg>
+                    </button>
+                    {openMenuId === session.id && createPortal(
+                      <div className="session-dropdown" style={{ top: menuPos.top, left: menuPos.left, position: 'fixed' }} onClick={(e) => e.stopPropagation()}>
+                        <button className="session-dropdown-item" onClick={(e) => handleShareClick(e, session.id)}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                          Share
+                        </button>
+                        <button className="session-dropdown-item danger" onClick={(e) => handleDeleteDropdownClick(e, session.id)}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                          Delete
+                        </button>
+                      </div>,
+                      document.body
                     )}
-                  </button>
+                  </div>
                 </div>
               </button>
             ))}

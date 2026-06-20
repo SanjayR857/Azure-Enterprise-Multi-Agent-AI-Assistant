@@ -16,6 +16,7 @@ from app.schemas.conversation_schema import (
     AllSessionsHistoryResponse,
     MessageDetails
 )
+
 import uuid
 
 import asyncio
@@ -52,8 +53,11 @@ async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db)
             # Dummy user UUID for now since no auth
             user_id = uuid.UUID(int=0)
             session = await conversation_service.create_session(db, user_id=user_id, session_id=session_id, title=request.message[:50])
-            
-        seq = len(session.messages) if session.messages else 0
+            # New session has no messages yet, so sequence starts at 0
+            seq = 0
+        else:
+            # Existing session: messages are eagerly loaded via selectinload in get_session
+            seq = len(session.messages) if session.messages else 0
         
         # Save user message
         user_msg = await conversation_service.add_message(
@@ -65,7 +69,7 @@ async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db)
             db, session_id=session_id, role="assistant", content=response, sequence_number=seq+1
         )
     except Exception as e:
-        logger.error(f"Failed to persist conversation history: {str(e)}")
+        logger.error(f"Failed to persist conversation history: {str(e)}", exc_info=True)
 
     return AgentResponse(
         input_token=input_tokens,
