@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 from pathlib import Path
 import os 
+from pydantic import AnyHttpUrl, computed_field
 # Resolve the backend directory dynamically to ensure .env is found regardless of where python is executed
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 env_path = BACKEND_DIR / ".env"
@@ -11,6 +12,35 @@ load_dotenv(dotenv_path=env_path)
 
 class Settings(BaseSettings):
 
+    # Azure App Registerations
+    BACKEND_CORS_ORIGINS: list[str | AnyHttpUrl] = ['http://localhost:8000', 'http://localhost:3000']
+    TENANT_ID: str = os.getenv("TENANT_ID")
+    APP_CLIENT_ID: str = os.getenv("APP_CLIENT_ID")
+    OPENAPI_CLIENT_ID: str = os.getenv("OPENAPI_CLIENT_ID")
+    SCOPE_DESCRIPTION: str = "access_as_user"
+
+    @computed_field
+    @property
+    def SCOPE_NAME(self) -> str:
+        return f'api://{self.APP_CLIENT_ID}/{self.SCOPE_DESCRIPTION}'
+
+    @computed_field
+    @property
+    def SCOPES(self) -> dict:
+        return {
+            self.SCOPE_NAME: self.SCOPE_DESCRIPTION,
+        }
+
+    @computed_field
+    @property
+    def OPENAPI_AUTHORIZATION_URL(self) -> str:
+        return f"https://login.microsoftonline.com/{self.TENANT_ID}/oauth2/v2.0/authorize"
+
+    @computed_field
+    @property
+    def OPENAPI_TOKEN_URL(self) -> str:
+        return f"https://login.microsoftonline.com/{self.TENANT_ID}/oauth2/v2.0/token"
+
     # OLLAMA ENDPOINTS 
     OLLAMA_API_KEY: str | None = None
     OLLAMA_MODEL: str = "gemma4:31b-cloud"
@@ -18,8 +48,6 @@ class Settings(BaseSettings):
 
     # EMBDING MODELS
     OLLAMA_EMBDING_MODEL: str =  os.getenv("OLLAMA_EMBDING_MODEL")
-
-
     # Generation defaults
     OLLAMA_TEMPERATURE: float = 0.0
     OLLAMA_TOP_K: int = 40
@@ -50,7 +78,11 @@ class Settings(BaseSettings):
     LOG_FILE_MAX_BYTES: int = int(os.getenv("LOG_FILE_MAX_BYTES", "10485760"))
     LOG_FILE_BACKUP_COUNT: int = int(os.getenv("LOG_FILE_BACKUP_COUNT", "5"))
 
-    model_config = SettingsConfigDict(env_file=env_path, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=BACKEND_DIR.parent / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
 
 settings = Settings()

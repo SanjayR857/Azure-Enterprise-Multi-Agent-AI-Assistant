@@ -1,11 +1,28 @@
 import React, { useEffect, useRef } from 'react';
+import { AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
+import { loginRequest } from './authConfig';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import useChat from './hooks/useChat';
 import './App.css';
 
+import LandingPage from './components/LandingPage';
+
 export default function App() {
+  return (
+    <>
+      <AuthenticatedTemplate>
+        <MainApp />
+      </AuthenticatedTemplate>
+      <UnauthenticatedTemplate>
+        <LandingPage />
+      </UnauthenticatedTemplate>
+    </>
+  );
+}
+
+function MainApp() {
   const {
     sessions,
     activeSessionId,

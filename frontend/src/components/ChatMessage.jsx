@@ -30,6 +30,7 @@ export default function ChatMessage({ message, onDelete, index }) {
       {/* AI Response */}
       {message.aiMessage && (
         <div className="message-row ai-row">
+
           <div className="message-content-wrapper">
             <div className={`message-bubble ai-bubble ${message.isError ? 'error-bubble' : ''}`}>
               <MarkdownRenderer content={message.aiMessage} />
@@ -57,6 +58,7 @@ export default function ChatMessage({ message, onDelete, index }) {
       {/* Pending state — waiting for AI */}
       {message.isPending && !message.aiMessage && (
         <div className="message-row ai-row">
+
           <div className="message-content-wrapper">
             <div className="message-bubble ai-bubble thinking-bubble">
               <div className="typing-indicator">

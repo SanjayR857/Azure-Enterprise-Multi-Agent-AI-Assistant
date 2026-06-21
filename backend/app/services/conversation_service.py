@@ -32,18 +32,21 @@ class ConversationService:
             logger.error(f"Failed to create chat session: {str(e)}")
             raise e
 
-    async def get_session(self, db: AsyncSession, session_id: uuid.UUID) -> ChatSession | None:
+    async def get_session(self, db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID) -> ChatSession | None:
         try:
-            stmt = select(ChatSession).where(ChatSession.id == session_id).options(selectinload(ChatSession.messages))
+            stmt = select(ChatSession).where(
+                ChatSession.id == session_id,
+                ChatSession.user_id == user_id
+            ).options(selectinload(ChatSession.messages))
             result = await db.execute(stmt)
             return result.scalar_one_or_none()
         except SQLAlchemyError as e:
             logger.error(f"Failed to get chat session: {str(e)}")
             raise e
 
-    async def get_all_sessions(self, db: AsyncSession) -> list[ChatSession]:
+    async def get_all_sessions(self, db: AsyncSession, user_id: uuid.UUID) -> list[ChatSession]:
         try:
-            stmt = select(ChatSession).options(selectinload(ChatSession.messages)).order_by(ChatSession.created_at.desc())
+            stmt = select(ChatSession).where(ChatSession.user_id == user_id).options(selectinload(ChatSession.messages)).order_by(ChatSession.created_at.desc())
             result = await db.execute(stmt)
             return list(result.scalars().all())
         except SQLAlchemyError as e:
@@ -74,9 +77,12 @@ class ConversationService:
             logger.error(f"Failed to add message to database: {str(e)}")
             raise e
 
-    async def delete_session(self, db: AsyncSession, session_id: uuid.UUID) -> bool:
+    async def delete_session(self, db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID) -> bool:
         try:
-            stmt = delete(ChatSession).where(ChatSession.id == session_id)
+            stmt = delete(ChatSession).where(
+                ChatSession.id == session_id,
+                ChatSession.user_id == user_id
+            )
             result = await db.execute(stmt)
             await db.commit()
             return result.rowcount > 0
@@ -85,12 +91,20 @@ class ConversationService:
             logger.error(f"Failed to delete session {session_id}: {str(e)}")
             raise e
 
-    async def delete_message(self, db: AsyncSession, message_id: uuid.UUID) -> bool:
+    async def delete_message(self, db: AsyncSession, message_id: uuid.UUID, user_id: uuid.UUID) -> bool:
         try:
-            stmt = delete(Message).where(Message.id == message_id)
+            stmt = select(Message).join(ChatSession).where(
+                Message.id == message_id, 
+                ChatSession.user_id == user_id
+            )
             result = await db.execute(stmt)
+            message = result.scalar_one_or_none()
+            if not message:
+                return False
+            
+            await db.delete(message)
             await db.commit()
-            return result.rowcount > 0
+            return True
         except SQLAlchemyError as e:
             await db.rollback()
             logger.error(f"Failed to delete message {message_id}: {str(e)}")
@@ -100,10 +114,14 @@ class ConversationService:
         self, 
         db: AsyncSession, 
         message_id: uuid.UUID, 
-        content: str
+        content: str,
+        user_id: uuid.UUID
     ) -> Message | None:
         try:
-            stmt = select(Message).where(Message.id == message_id)
+            stmt = select(Message).join(ChatSession).where(
+                Message.id == message_id,
+                ChatSession.user_id == user_id
+            )
             result = await db.execute(stmt)
             db_message = result.scalar_one_or_none()
             if db_message:

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useMsal } from '@azure/msal-react';
 
 /**
  * Sidebar component — session list, new chat button, health status, token stats.
@@ -16,6 +17,9 @@ export default function Sidebar({
   isCollapsed,
   onToggleCollapse,
 }) {
+  const { instance, accounts } = useMsal();
+  const user = accounts.length > 0 ? accounts[0] : null;
+
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
 
@@ -147,7 +151,7 @@ export default function Sidebar({
                     {openMenuId === session.id && createPortal(
                       <div className="session-dropdown" style={{ top: menuPos.top, left: menuPos.left, position: 'fixed' }} onClick={(e) => e.stopPropagation()}>
                         <button className="session-dropdown-item" onClick={(e) => handleShareClick(e, session.id)}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
                           Share
                         </button>
                         <button className="session-dropdown-item danger" onClick={(e) => handleDeleteDropdownClick(e, session.id)}>
@@ -198,6 +202,27 @@ export default function Sidebar({
             </span>
           )}
         </div>
+
+        {/* User Profile & Logout */}
+        {user && (
+          <div className="profile-panel" style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-color)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{user.name}</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{user.username}</span>
+            </div>
+            <button
+              onClick={() => instance.logoutRedirect()}
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+              title="Sign Out"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );

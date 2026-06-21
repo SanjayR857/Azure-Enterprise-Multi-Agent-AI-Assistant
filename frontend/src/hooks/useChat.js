@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
-
+import { useMsal } from '@azure/msal-react';
+import { loginRequest } from '../authConfig';
 const API_BASE = 'http://localhost:8000';
 
 /**
@@ -20,6 +21,33 @@ export default function useChat() {
   const [tokenStats, setTokenStats] = useState({ totalInput: 0, totalOutput: 0, totalTokens: 0, requests: 0 });
 
   const healthIntervalRef = useRef(null);
+  
+  const { instance, accounts } = useMsal();
+
+  const fetchWithAuth = useCallback(async (endpoint, options = {}) => {
+    if (accounts.length === 0) {
+      throw new Error("User not authenticated");
+    }
+    
+    try {
+      // Attempt silent token acquisition
+      const response = await instance.acquireTokenSilent({
+        ...loginRequest,
+        account: accounts[0]
+      });
+      
+      const headers = new Headers(options.headers || {});
+      headers.append('Authorization', `Bearer ${response.accessToken}`);
+      
+      return fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers
+      });
+    } catch (error) {
+      console.error("Token acquisition failed:", error);
+      throw error;
+    }
+  }, [instance, accounts]);
 
   // ──────── HEALTH CHECK ────────
   const checkHealth = useCallback(async () => {
@@ -49,9 +77,10 @@ export default function useChat() {
 
   // ──────── LOAD ALL SESSIONS ────────
   const loadSessions = useCallback(async () => {
+    if (accounts.length === 0) return; // Wait for auth
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/conversation/all_sessions`);
+      const res = await fetchWithAuth(`/conversation/all_sessions`);
       if (!res.ok) throw new Error(`Failed to load sessions: ${res.status}`);
       const data = await res.json();
 
@@ -96,7 +125,7 @@ export default function useChat() {
     setIsLoading(true);
     setActiveSessionId(sessionId);
     try {
-      const res = await fetch(`${API_BASE}/conversation/history/${sessionId}`);
+      const res = await fetchWithAuth(`/conversation/history/${sessionId}`);
       if (!res.ok) throw new Error(`Failed to load history: ${res.status}`);
       const data = await res.json();
 
@@ -137,7 +166,7 @@ export default function useChat() {
       const body = { message };
       if (sessionId) body.session_id = sessionId;
 
-      const res = await fetch(`${API_BASE}/conversation/agent`, {
+      const res = await fetchWithAuth(`/conversation/agent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -202,7 +231,7 @@ export default function useChat() {
   // ──────── DELETE SESSION ────────
   const deleteSession = useCallback(async (sessionId) => {
     try {
-      const res = await fetch(`${API_BASE}/conversation/session/${sessionId}`, { method: 'DELETE' });
+      const res = await fetchWithAuth(`/conversation/session/${sessionId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`Failed to delete: ${res.status}`);
 
       setSessions(prev => prev.filter(s => s.id !== sessionId));
@@ -221,7 +250,7 @@ export default function useChat() {
   // ──────── DELETE MESSAGE ────────
   const deleteMessage = useCallback(async (messageId) => {
     try {
-      const res = await fetch(`${API_BASE}/conversation/message/${messageId}`, { method: 'DELETE' });
+      const res = await fetchWithAuth(`/conversation/message/${messageId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`Failed to delete message: ${res.status}`);
 
       setMessages(prev => prev.filter(m => m.id !== messageId));
@@ -239,7 +268,7 @@ export default function useChat() {
         ? { humanMessage: content }
         : { aiMessage: content };
 
-      const res = await fetch(`${API_BASE}/conversation/message/${messageId}`, {
+      const res = await fetchWithAuth(`/conversation/message/${messageId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

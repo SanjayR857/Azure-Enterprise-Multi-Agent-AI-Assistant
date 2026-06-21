@@ -7,7 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.conversation_service import conversation_service
 from app.schemas.request_models import AgentRequest
 from app.schemas.response_models import AgentResponse
-
+from fastapi import APIRouter, Depends
+from app.api.dependencies.auth import validate_user
+from app.models.user import User
 from app.schemas.conversation_schema import (
     ConversationMessageCreate,
     ConversationMessageUpdate,
@@ -27,10 +29,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/conversation",
     tags=["conversation"],
+    dependencies=[Depends(validate_user)]
 )
 
 @router.post("/agent", response_model=AgentResponse)
-async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db)):
+async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
     """
     Handles incoming user messages, triggers the agent orchestrator, 
     persists the exchange to the conversation history, and returns the response.
@@ -48,11 +51,9 @@ async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db)
     
     # 4. Asynchronously persist the conversation message exchange to database
     try:
-        session = await conversation_service.get_session(db, session_id)
+        session = await conversation_service.get_session(db, session_id, current_user.id)
         if not session:
-            # Dummy user UUID for now since no auth
-            user_id = uuid.UUID(int=0)
-            session = await conversation_service.create_session(db, user_id=user_id, session_id=session_id, title=request.message[:50])
+            session = await conversation_service.create_session(db, user_id=current_user.id, session_id=session_id, title=request.message[:50])
             # New session has no messages yet, so sequence starts at 0
             seq = 0
         else:
@@ -106,11 +107,11 @@ def _group_messages(messages):
     return formatted
 
 @router.get("/all_sessions", response_model=AllSessionsHistoryResponse)
-async def get_all_sessions(db: AsyncSession = Depends(get_db)):
+async def get_all_sessions(db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
     """
     Retrieves all sessions with their complete message history.
     """
-    all_sessions = await conversation_service.get_all_sessions(db)
+    all_sessions = await conversation_service.get_all_sessions(db, current_user.id)
     
     sessions_dict = {}
     for session in all_sessions:
@@ -119,11 +120,11 @@ async def get_all_sessions(db: AsyncSession = Depends(get_db)):
     return AllSessionsHistoryResponse(sessions=sessions_dict)
 
 @router.get("/history/{session_id}", response_model=SessionHistoryResponse)
-async def get_history(session_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_history(session_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
     """
     Retrieves the complete chat history for a specific session ID structured by message ID.
     """
-    session = await conversation_service.get_session(db, session_id)
+    session = await conversation_service.get_session(db, session_id, current_user.id)
     if not session:
         return SessionHistoryResponse(sessionId=session_id, messages={})
         
@@ -135,21 +136,21 @@ async def get_history(session_id: uuid.UUID, db: AsyncSession = Depends(get_db))
     )
 
 @router.delete("/session/{session_id}")
-async def delete_session(session_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def delete_session(session_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
     """
     Deletes the conversation history for a specific session ID.
     """
-    deleted = await conversation_service.delete_session(db, session_id)
+    deleted = await conversation_service.delete_session(db, session_id, current_user.id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "success", "message": f"Session {session_id} deleted successfully"}
 
 @router.delete("/message/{message_id}")
-async def delete_message(message_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def delete_message(message_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
     """
     Deletes a specific message by its message ID. 
     """
-    deleted = await conversation_service.delete_message(db, message_id)
+    deleted = await conversation_service.delete_message(db, message_id, current_user.id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Message not found")
     return {"status": "success", "message": f"Message {message_id} deleted successfully"}
@@ -158,7 +159,8 @@ async def delete_message(message_id: uuid.UUID, db: AsyncSession = Depends(get_d
 async def update_message(
     message_id: uuid.UUID,
     update_data: ConversationMessageUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(validate_user)
 ):
     """
     Updates the content of a specific message by its message ID.
@@ -170,7 +172,8 @@ async def update_message(
     updated_message = await conversation_service.update_message(
         db, 
         message_id, 
-        content=content
+        content=content,
+        user_id=current_user.id
     )
     if not updated_message:
         raise HTTPException(status_code=404, detail="Message not found")

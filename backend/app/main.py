@@ -2,10 +2,10 @@
 from fastapi import FastAPI
 # pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
-
+from app.core.config import settings
 from app.api.api_router import api_router
 from app.core.logging import setup_logging
-
+from app.core.security import azure_scheme
 # Initialize logging configuration
 setup_logging()
 
@@ -23,6 +23,12 @@ lifecycle management for MCP servers and database pools
 async def lifespan(app: FastAPI):
     logger.info("Starting up FastAPI application...")
     
+
+    # Load OpenID config on startup
+    logger.info("Loading OpenID config on startup...")
+    await azure_scheme.openid_config.load_config()
+    logger.info("OpenID config loaded successfully.")
+
     # Initialize database tables
     logger.info("Initializing database tables...")
     from app.database.session import engine
@@ -54,16 +60,25 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Enterprise Multi-Agent AI Assistant",
     version="0.0.1",
-    lifespan=lifespan
+    lifespan=lifespan,
+    swagger_ui_oauth2_redirect_url='/oauth2-redirect',
+    swagger_ui_init_oauth={
+        'usePkceWithAuthorizationCodeGrant': True,
+        'clientId': settings.OPENAPI_CLIENT_ID,
+        'scopes': settings.SCOPE_NAME,
+    },
 )
+
+
 # Enable CORS for frontend UI connection
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if settings.BACKEND_CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 app.include_router(api_router)
 
@@ -71,4 +86,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("app.main:app", host="localhost", port=8000, reload=True)
-
