@@ -173,35 +173,78 @@ export default function useChat() {
       });
 
       if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const data = await res.json();
+      
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      
+      let returnedSessionId = null;
+      let fullResponse = "";
+      let finalData = null;
+      let buffer = "";
 
-      const returnedSessionId = data.session_id;
-
-      // Update the temporary message with the real response
-      setMessages(prev =>
-        prev.map(m =>
-          m.id === tempId
-            ? {
-                ...m,
-                aiMessage: data.response,
-                isPending: false,
-                tokens: {
-                  input: data.input_token,
-                  output: data.output_token,
-                  total: data.total_token,
-                },
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop(); // Keep the incomplete part
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.substring(6);
+            if (!dataStr.trim()) continue;
+            
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.done) {
+                finalData = data;
+                returnedSessionId = data.session_id;
+              } else if (data.chunk) {
+                fullResponse += data.chunk;
+                
+                // Incrementally update the UI with streaming chunks
+                setMessages(prev =>
+                  prev.map(m =>
+                    m.id === tempId
+                      ? { ...m, aiMessage: fullResponse }
+                      : m
+                  )
+                );
               }
-            : m
-        )
-      );
+            } catch (e) {
+              console.error("Error parsing stream chunk", e, dataStr);
+            }
+          }
+        }
+      }
 
-      // Update token stats
-      setTokenStats(prev => ({
-        totalInput: prev.totalInput + (data.input_token || 0),
-        totalOutput: prev.totalOutput + (data.output_token || 0),
-        totalTokens: prev.totalTokens + (data.total_token || 0),
-        requests: prev.requests + 1,
-      }));
+      if (finalData) {
+        // Finalize message state with token stats
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === tempId
+              ? {
+                  ...m,
+                  aiMessage: finalData.response,
+                  isPending: false,
+                  tokens: {
+                    input: finalData.input_token,
+                    output: finalData.output_token,
+                    total: finalData.total_token,
+                  },
+                }
+              : m
+          )
+        );
+
+        setTokenStats(prev => ({
+          totalInput: prev.totalInput + (finalData.input_token || 0),
+          totalOutput: prev.totalOutput + (finalData.output_token || 0),
+          totalTokens: prev.totalTokens + (finalData.total_token || 0),
+          requests: prev.requests + 1,
+        }));
+      }
 
       // If new session was created, update active session ID
       if (!sessionId && returnedSessionId) {
@@ -211,7 +254,7 @@ export default function useChat() {
       // Refresh sessions list to show the new/updated session
       await loadSessions();
 
-      return { sessionId: returnedSessionId, response: data.response };
+      return { sessionId: returnedSessionId, response: fullResponse };
     } catch (err) {
       setError(err.message);
       // Mark the message as errored

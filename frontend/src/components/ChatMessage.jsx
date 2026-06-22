@@ -30,26 +30,60 @@ export default function ChatMessage({ message, onDelete, index }) {
       {/* AI Response */}
       {message.aiMessage && (
         <div className="message-row ai-row">
-
           <div className="message-content-wrapper">
-            <div className={`message-bubble ai-bubble ${message.isError ? 'error-bubble' : ''}`}>
+            <div id={`ai-msg-${index}`} className={`message-bubble ai-bubble ${message.isError ? 'error-bubble' : ''}`}>
               <MarkdownRenderer content={message.aiMessage} />
             </div>
             <div className="message-meta ai-meta">
-              <span className="message-time">{formatTime(message.createdAt)}</span>
-              {message.tokens && (
-                <div className="token-pills">
-                  <span className="token-pill" title="Input tokens">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /></svg>
-                    {message.tokens.input}
-                  </span>
-                  <span className="token-pill" title="Output tokens">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="7 23 3 19 7 15" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
-                    {message.tokens.output}
-                  </span>
-                  <span className="token-pill total-pill" title="Total tokens">Σ {message.tokens.total}</span>
-                </div>
+              {message.model && (
+                <>
+                  <span className="ai-meta-item highlight">{message.model}</span>
+                  <span className="ai-meta-divider">|</span>
+                </>
               )}
+              {message.latency && (
+                <>
+                  <span className="ai-meta-item">{message.latency}s</span>
+                  <span className="ai-meta-divider">|</span>
+                </>
+              )}
+              {message.tokens && (
+                <>
+                  <span className="ai-meta-item" title="Tokens">
+                    {message.tokens.total}t
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginLeft: '2px', opacity: 0.7}}>
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                  </span>
+                  <span className="ai-meta-divider">|</span>
+                </>
+              )}
+              <span className="ai-meta-item highlight">message</span>
+              
+              <button className="icon-btn" onClick={() => {
+                const el = document.getElementById(`ai-msg-${index}`);
+                if (el) {
+                  navigator.clipboard.writeText(el.innerText);
+                } else {
+                  navigator.clipboard.writeText(message.aiMessage);
+                }
+              }} title="Copy">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+
+              <button className="icon-btn" onClick={() => onDelete && onDelete(index)} title="Delete">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -58,7 +92,6 @@ export default function ChatMessage({ message, onDelete, index }) {
       {/* Pending state — waiting for AI */}
       {message.isPending && !message.aiMessage && (
         <div className="message-row ai-row">
-
           <div className="message-content-wrapper">
             <div className="message-bubble ai-bubble thinking-bubble">
               <div className="typing-indicator">

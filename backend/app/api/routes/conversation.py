@@ -18,11 +18,11 @@ from app.schemas.conversation_schema import (
     AllSessionsHistoryResponse,
     MessageDetails
 )
-
 import uuid
-
 import asyncio
 import logging
+import json
+from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ router = APIRouter(
     dependencies=[Depends(validate_user)]
 )
 
-@router.post("/agent", response_model=AgentResponse)
+@router.post("/agent")
 async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
     """
     Handles incoming user messages, triggers the agent orchestrator, 
@@ -72,13 +72,27 @@ async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db)
     except Exception as e:
         logger.error(f"Failed to persist conversation history: {str(e)}", exc_info=True)
 
-    return AgentResponse(
-        input_token=input_tokens,
-        output_token=output_tokens,
-        total_token=input_tokens + output_tokens,
-        response=response,
-        session_id=session_id
-    )
+    async def generate_stream():
+        # Yield the response in simulated chunks to provide a typing effect
+        # since the underlying graph is synchronous.
+        # In a fully async graph, this would use astream_events.
+        chunk_size = 4
+        for i in range(0, len(response), chunk_size):
+            chunk = response[i:i+chunk_size]
+            yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            await asyncio.sleep(0.01)
+            
+        final_data = {
+            "done": True,
+            "response": response,
+            "input_token": input_tokens,
+            "output_token": output_tokens,
+            "total_token": input_tokens + output_tokens,
+            "session_id": str(session_id)
+        }
+        yield f"data: {json.dumps(final_data)}\n\n"
+
+    return StreamingResponse(generate_stream(), media_type="text/event-stream")
 
 def _group_messages(messages):
     """

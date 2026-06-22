@@ -4,39 +4,39 @@
 
 :root {
   /* ---- Color Palette ---- */
-  --bg-primary: #08080d;
-  --bg-secondary: #0e0e16;
-  --bg-surface: #13131e;
-  --bg-elevated: #1a1a2e;
-  --bg-hover: #1f1f35;
-  --bg-active: #25254a;
+  --bg-primary: #050505;
+  --bg-secondary: #0a0a0a;
+  --bg-surface: #121212;
+  --bg-elevated: #1a1a1a;
+  --bg-hover: #27272a;
+  --bg-active: #3f3f46;
 
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
 
-  --text-primary: #f0f0f5;
-  --text-secondary: #a0a0b8;
-  --text-muted: #6b6b85;
-  --text-inverse: #08080d;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-inverse: #000000;
 
   /* Accent Gradient Spectrum */
-  --accent-indigo: #6366f1;
-  --accent-violet: #8b5cf6;
-  --accent-purple: #a855f7;
+  --accent-indigo: #818cf8;
+  --accent-violet: #a78bfa;
+  --accent-purple: #c084fc;
   --accent-cyan: #22d3ee;
   --accent-emerald: #34d399;
-  --accent-rose: #f43f5e;
+  --accent-rose: #fb7185;
 
-  --gradient-primary: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
-  --gradient-accent: linear-gradient(135deg, #6366f1, #22d3ee);
-  --gradient-warm: linear-gradient(135deg, #f43f5e, #a855f7);
-  --gradient-surface: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.04));
+  --gradient-primary: linear-gradient(135deg, #818cf8, #a78bfa, #c084fc);
+  --gradient-accent: linear-gradient(135deg, #818cf8, #22d3ee);
+  --gradient-warm: linear-gradient(135deg, #fb7185, #c084fc);
+  --gradient-surface: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
 
   /* Glass */
-  --glass-bg: rgba(19, 19, 30, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-blur: 20px;
+  --glass-bg: rgba(18, 18, 18, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-blur: 24px;
 
   /* ---- Typography ---- */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
