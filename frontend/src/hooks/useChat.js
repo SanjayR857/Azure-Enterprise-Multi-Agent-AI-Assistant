@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { loginRequest } from '../authConfig';
 const API_BASE = 'http://localhost:8000';
@@ -9,7 +9,13 @@ const API_BASE = 'http://localhost:8000';
  */
 export default function useChat() {
   const [sessions, setSessions] = useState([]);
-  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [activeSessionId, setActiveSessionId] = useState(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith('#/chat/')) {
+      return hash.replace('#/chat/', '');
+    }
+    return null;
+  });
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -75,6 +81,16 @@ export default function useChat() {
     return () => clearInterval(healthIntervalRef.current);
   }, [checkHealth]);
 
+  // ──────── ROUTING SYNC ────────
+  // Sync active session to URL
+  useEffect(() => {
+    if (activeSessionId) {
+      window.history.replaceState(null, '', `#/chat/${activeSessionId}`);
+    } else {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, [activeSessionId]);
+
   // ──────── LOAD ALL SESSIONS ────────
   const loadSessions = useCallback(async () => {
     if (accounts.length === 0) return; // Wait for auth
@@ -85,8 +101,8 @@ export default function useChat() {
       const data = await res.json();
 
       // Transform the nested dict structure into an array
-      const sessionList = Object.entries(data.sessions || {}).map(([sessionId, messagesDict]) => {
-        const msgArray = Object.entries(messagesDict).map(([msgId, details]) => ({
+      const sessionList = Object.entries(data.sessions || {}).map(([sessionId, sessionData]) => {
+        const msgArray = Object.entries(sessionData.messages || {}).map(([msgId, details]) => ({
           id: msgId,
           humanMessage: details.humanMessage,
           aiMessage: details.aiMessage,
@@ -100,7 +116,8 @@ export default function useChat() {
 
         return {
           id: sessionId,
-          title: firstMsg?.humanMessage?.substring(0, 60) || 'New Chat',
+          title: sessionData.title || firstMsg?.humanMessage?.substring(0, 60) || 'New Chat',
+          isPinned: sessionData.is_pinned || false,
           preview: lastMsg?.aiMessage?.substring(0, 80) || '',
           messageCount: msgArray.length,
           createdAt: firstMsg?.createdAt,
@@ -290,6 +307,20 @@ export default function useChat() {
     }
   }, [activeSessionId]);
 
+  // ──────── TOGGLE PIN ────────
+  const togglePin = useCallback(async (sessionId, currentPinnedState) => {
+    try {
+      const res = await fetchWithAuth(`/conversation/session/${sessionId}/pin?is_pinned=${!currentPinnedState}`, { method: 'PATCH' });
+      if (!res.ok) throw new Error(`Failed to pin/unpin: ${res.status}`);
+
+      setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, isPinned: !currentPinnedState } : s));
+      return true;
+    } catch (err) {
+      setError(err.message);
+      return false;
+    }
+  }, [fetchWithAuth]);
+
   // ──────── DELETE MESSAGE ────────
   const deleteMessage = useCallback(async (messageId) => {
     try {
@@ -359,5 +390,6 @@ export default function useChat() {
     startNewChat,
     clearError,
     setActiveSessionId,
+    togglePin,
   };
 }

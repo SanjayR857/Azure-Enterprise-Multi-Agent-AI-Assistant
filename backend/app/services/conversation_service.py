@@ -1,5 +1,7 @@
+from app.services.agent_service import agent_service
 import logging
 import uuid
+import asyncio
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -17,11 +19,27 @@ class ConversationService:
     """
 
     async def create_session(self, db: AsyncSession, user_id: uuid.UUID, session_id: uuid.UUID = None, title: str = None) -> ChatSession:
+        final_title = title
+        if title:
+            try:
+                prompt = f"Generate a short, descriptive, and professional topic title (max 50 letters) for a conversation starting with this message: '{title}'. Respond ONLY with the title. No quotes, no punctuation, no conversational filler."
+                loop = asyncio.get_running_loop()
+                response = await loop.run_in_executor(None, agent_service.run_chat, prompt)
+                cleaned_title = response.strip('\"\'\n').strip()
+                if cleaned_title:
+                    final_title = cleaned_title
+                else:
+                    final_title = title[:50]
+                logger.info(f"Generated title: {final_title}")
+            except Exception as e:
+                logger.error(f"Title generation failed: {e}")
+                final_title = title[:50]
+        logger.info(f"Final title: {final_title}")
         try:
             db_session = ChatSession(
                 id=session_id or uuid.uuid4(),
                 user_id=user_id,
-                title=title
+                title=final_title
             )
             db.add(db_session)
             await db.commit()
@@ -31,6 +49,7 @@ class ConversationService:
             await db.rollback()
             logger.error(f"Failed to create chat session: {str(e)}")
             raise e
+
 
     async def get_session(self, db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID) -> ChatSession | None:
         try:

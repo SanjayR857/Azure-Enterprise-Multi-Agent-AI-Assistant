@@ -23,6 +23,7 @@ import asyncio
 import logging
 import json
 from fastapi.responses import StreamingResponse
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db)
     try:
         session = await conversation_service.get_session(db, session_id, current_user.id)
         if not session:
-            session = await conversation_service.create_session(db, user_id=current_user.id, session_id=session_id, title=request.message[:50])
+            session = await conversation_service.create_session(db, user_id=current_user.id, session_id=session_id, title=request.message)
             # New session has no messages yet, so sequence starts at 0
             seq = 0
         else:
@@ -129,9 +130,14 @@ async def get_all_sessions(db: AsyncSession = Depends(get_db), current_user: Use
     
     sessions_dict = {}
     for session in all_sessions:
-        sessions_dict[session.id] = _group_messages(session.messages)
+        sessions_dict[session.id] = {
+            "title": session.title or "New Chat",
+            "is_pinned": session.is_pinned,
+            "messages": _group_messages(session.messages)
+        }
         
     return AllSessionsHistoryResponse(sessions=sessions_dict)
+
 
 @router.get("/history/{session_id}", response_model=SessionHistoryResponse)
 async def get_history(session_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
@@ -148,6 +154,24 @@ async def get_history(session_id: uuid.UUID, db: AsyncSession = Depends(get_db),
         sessionId=session_id,
         messages=formatted_messages
     )
+
+@router.patch("/session/{session_id}/pin")
+async def toggle_pin_session(
+    session_id: uuid.UUID, 
+    is_pinned: bool,
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(validate_user)
+):
+    """
+    Toggles the pinned status of a session.
+    """
+    session = await conversation_service.get_session(db, session_id, current_user.id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    session.is_pinned = is_pinned
+    await db.commit()
+    return {"status": "success", "is_pinned": is_pinned}
 
 @router.delete("/session/{session_id}")
 async def delete_session(session_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):

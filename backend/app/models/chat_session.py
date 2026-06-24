@@ -20,6 +20,7 @@ class ChatSession(Base):
     total_messages = Column(Integer, default=0)
     total_tokens = Column(Integer, default=0)
     is_archived = Column(Boolean, default=False)
+    is_pinned = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 

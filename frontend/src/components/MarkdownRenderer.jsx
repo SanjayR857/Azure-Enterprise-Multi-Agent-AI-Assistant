@@ -1,6 +1,8 @@
 import React, { useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 export default function MarkdownRenderer({ content }) {
   const handleClick = useCallback((e) => {
@@ -38,11 +40,17 @@ export default function MarkdownRenderer({ content }) {
                 <span>Copy</span>
               </button>
             </div>
-            <pre style={{ margin: 0, padding: 0, background: 'transparent' }}>
-              <code id={codeId} className={className} {...props}>
-                {children}
-              </code>
-            </pre>
+            <div id={codeId}>
+              <SyntaxHighlighter
+                language={lang}
+                style={vscDarkPlus}
+                customStyle={{ margin: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, fontSize: '0.9rem' }}
+                PreTag="div"
+                {...props}
+              >
+                {String(children).replace(/\n$/, '')}
+              </SyntaxHighlighter>
+            </div>
           </div>
         );
       }

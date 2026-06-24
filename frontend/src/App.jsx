@@ -38,6 +38,7 @@ function MainApp() {
     sendMessage,
     deleteSession,
     startNewChat,
+    togglePin,
   } = useChat();
 
   const messagesEndRef = useRef(null);
@@ -49,6 +50,32 @@ function MainApp() {
     const cleanup = startHealthCheck();
     return cleanup;
   }, [loadSessions, startHealthCheck]);
+
+  // Initial load from URL hash
+  useEffect(() => {
+    if (activeSessionId) {
+      loadHistory(activeSessionId);
+    }
+    // Only run this once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle back/forward navigation
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#/chat/')) {
+        const id = hash.replace('#/chat/', '');
+        if (id !== activeSessionId) {
+          loadHistory(id);
+        }
+      } else if (hash === '' || hash === '#/') {
+        startNewChat();
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [activeSessionId, loadHistory, startNewChat]);
 
   // Resizing logic
   const isResizing = useRef(false);
@@ -123,6 +150,7 @@ function MainApp() {
         onSelectSession={handleSelectSession}
         onNewChat={startNewChat}
         onDeleteSession={deleteSession}
+        onTogglePin={togglePin}
         healthStatus={healthStatus}
         latency={latency}
         tokenStats={tokenStats}

@@ -46,8 +46,17 @@ class SessionHistoryResponse(BaseModel):
         populate_by_name=True,
     )
 
+class SessionDetails(BaseModel):
+    title: str = Field(...)
+    is_pinned: bool = Field(False)
+    messages: dict[UUID, MessageDetails] = Field(...)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
 class AllSessionsHistoryResponse(BaseModel):
-    sessions: dict[UUID, dict[UUID, MessageDetails]] = Field(..., description="Dictionary mapping session ID to its messages")
+    sessions: dict[UUID, SessionDetails] = Field(..., description="Dictionary mapping session ID to its details")
 
     model_config = ConfigDict(
         populate_by_name=True,
