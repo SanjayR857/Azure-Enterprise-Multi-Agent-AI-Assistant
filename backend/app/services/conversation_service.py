@@ -1,4 +1,4 @@
-from app.services.agent_service import agent_service
+from app.services.azure_agent_service import azure_agent_service
 import logging
 import uuid
 import asyncio
@@ -24,7 +24,7 @@ class ConversationService:
             try:
                 prompt = f"Generate a short, descriptive, and professional topic title (max 50 letters) for a conversation starting with this message: '{title}'. Respond ONLY with the title. No quotes, no punctuation, no conversational filler."
                 loop = asyncio.get_running_loop()
-                response = await loop.run_in_executor(None, agent_service.run_chat, prompt)
+                response = await loop.run_in_executor(None, azure_agent_service.run_chat, prompt)
                 cleaned_title = response.strip('\"\'\n').strip()
                 if cleaned_title:
                     final_title = cleaned_title

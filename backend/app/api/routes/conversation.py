@@ -1,12 +1,13 @@
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException
-from app.services.agent_service import agent_service
+from app.services.azure_agent_service import azure_agent_service
 from app.utils import count_tokens
 from app.database.session import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.conversation_service import conversation_service
 from app.schemas.request_models import AgentRequest
 from app.schemas.response_models import AgentResponse
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends
 from app.api.dependencies.auth import validate_user
 from app.models.user import User
@@ -22,6 +23,7 @@ import uuid
 import asyncio
 import logging
 import json
+# pyrefly: ignore [missing-import]
 from fastapi.responses import StreamingResponse
 from uuid import UUID
 
@@ -42,7 +44,7 @@ async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db)
     """
     # 1. Run the blocking orchestrator workflow in a thread pool
     loop = asyncio.get_running_loop()
-    response = await loop.run_in_executor(None, agent_service.run_orchestrator, request.message)
+    response = await loop.run_in_executor(None, azure_agent_service.run_chat, request.message)
     
     # 2. Track token counts
     input_tokens = count_tokens(request.message)
