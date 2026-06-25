@@ -27,3 +27,4 @@ langgraph-checkpoint>=0.4.0  # Checkpointing for LangGraph to persist state
 sqlalchemy  # its a ORM that is used for database integration 
 asyncpg>=0.31.0 # async pgsql driver for postgresql
 psycopg2-binary>=2.9.12 # sync pgsql driver for postgresql
+langchain-azure-ai>=1.2.7 # langchain azure ai for integration with azure openai and azure openai search

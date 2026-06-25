@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     OLLAMA_TOP_P: float = 0.9
     OLLAMA_NUM_CTX: int = 2048
 
+    # LLM Provider Toggle (ollama or azure)
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "azure")
+
+    # AZURE OPENAI ENDPOINTS
+    AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT")
+    AZURE_OPENAI_MODEL: str = os.getenv("AZURE_OPENAI_MODEL")
+    AZURE_OPENAI_MAX_TOKENS: int = int(os.getenv("AZURE_OPENAI_MAX_TOKENS", "1000"))
+    AZURE_OPENAI_TEMPERATURE: float = float(os.getenv("AZURE_OPENAI_TEMPERATURE", "0.0"))
+
     # Postgres DB Config
     POSTGRES_USER: str = os.getenv("POSTGRES_USER")
     POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD")
