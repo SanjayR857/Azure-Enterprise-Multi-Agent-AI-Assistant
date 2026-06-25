@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from fastapi_azure_auth import SingleTenantAzureAuthorizationCodeBearer
 from app.core.config import settings
 

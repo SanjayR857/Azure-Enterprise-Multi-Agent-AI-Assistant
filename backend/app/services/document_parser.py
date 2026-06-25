@@ -1,0 +1,96 @@
+import pandas as pd
+# pyrefly: ignore [missing-import]
+from pypdf import PdfReader
+
+# pyrefly: ignore [missing-import]
+from docx import Document
+from app.models.document import Document as DBDocument
+from langchain_core.documents import Document as LangchainDocument
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+# pyrefly: ignore [missing-import]
+from langchain_chroma import Chroma
+from langchain_ollama import OllamaEmbeddings
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Initialize the Embeddings Model
+# NOTE: Make sure you have pulled an embeddings model in Ollama (e.g., run `ollama pull nomic-embed-text` in your terminal)
+embeddings = OllamaEmbeddings(model="nomic-embed-text") 
+
+# Initialize ChromaDB Vector Store
+vector_store = Chroma(
+    collection_name="chat_documents",
+    embedding_function=embeddings,
+    persist_directory="./chroma_db"
+)
+
+class DocumentParserService:
+    def extract_text(self, file_path: str, ext: str) -> str:
+        text = ""
+        try:
+            if ext == ".pdf":
+                reader = PdfReader(file_path)
+                for page in reader.pages:
+                    extracted = page.extract_text()
+                    if extracted:
+                        text += extracted + "\n"
+            elif ext == ".docx":
+                doc = Document(file_path)
+                for para in doc.paragraphs:
+                    text += para.text + "\n"
+            elif ext in [".xlsx", ".xls"]:
+                df = pd.read_excel(file_path)
+                text = df.to_string()
+            elif ext == ".csv":
+                df = pd.read_csv(file_path)
+                text = df.to_string()
+            elif ext == ".txt":
+                with open(file_path, "r", encoding="utf-8") as f:
+                    text = f.read()
+            else:
+                logger.warning(f"Unsupported extraction for {ext}")
+        except Exception as e:
+            logger.error(f"Error parsing {file_path}: {str(e)}")
+            
+        return text
+
+    async def process_and_index(self, db_document: DBDocument):
+        """
+        Extracts text from the physical file, chunks it, and saves to Vector DB.
+        """
+        # Get the extension
+        ext = db_document.original_filename[db_document.original_filename.rfind("."):].lower()
+        
+        # 1. Extract raw text from the file
+        raw_text = self.extract_text(db_document.storage_path, ext)
+        if not raw_text.strip():
+            logger.warning(f"No text extracted from {db_document.original_filename}")
+            return
+
+        # 2. Chop the text into ~1000 character chunks with a 200 character overlap
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            add_start_index=True
+        )
+        chunks = text_splitter.split_text(raw_text)
+
+        # 3. Create Langchain Documents and attach our Database Metadata to them
+        docs = []
+        for chunk in chunks:
+            docs.append(LangchainDocument(
+                page_content=chunk,
+                metadata={
+                    "session_id": str(db_document.session_id),
+                    "document_id": str(db_document.id),
+                    "filename": db_document.original_filename
+                }
+            ))
+
+        # 4. Embed and save to Chroma DB
+        if docs:
+            vector_store.add_documents(docs)
+            logger.info(f"Indexed {len(docs)} chunks for document {db_document.original_filename}")
+
+document_parser = DocumentParserService()

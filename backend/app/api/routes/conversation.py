@@ -33,6 +33,7 @@ router = APIRouter(
     dependencies=[Depends(validate_user)]
 )
 
+
 @router.post("/agent")
 async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
     """
@@ -73,6 +74,7 @@ async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db)
     except Exception as e:
         logger.error(f"Failed to persist conversation history: {str(e)}", exc_info=True)
 
+
     async def generate_stream():
         # Yield the response in simulated chunks to provide a typing effect
         # since the underlying graph is synchronous.
@@ -94,6 +96,7 @@ async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db)
         yield f"data: {json.dumps(final_data)}\n\n"
 
     return StreamingResponse(generate_stream(), media_type="text/event-stream")
+
 
 def _group_messages(messages):
     """
@@ -120,6 +123,7 @@ def _group_messages(messages):
             current_user_msg = None
             
     return formatted
+
 
 @router.get("/all_sessions", response_model=AllSessionsHistoryResponse)
 async def get_all_sessions(db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
@@ -155,6 +159,7 @@ async def get_history(session_id: uuid.UUID, db: AsyncSession = Depends(get_db),
         messages=formatted_messages
     )
 
+
 @router.patch("/session/{session_id}/pin")
 async def toggle_pin_session(
     session_id: uuid.UUID, 
@@ -173,6 +178,7 @@ async def toggle_pin_session(
     await db.commit()
     return {"status": "success", "is_pinned": is_pinned}
 
+
 @router.delete("/session/{session_id}")
 async def delete_session(session_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
     """
@@ -183,6 +189,7 @@ async def delete_session(session_id: uuid.UUID, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "success", "message": f"Session {session_id} deleted successfully"}
 
+
 @router.delete("/message/{message_id}")
 async def delete_message(message_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
     """
@@ -192,6 +199,7 @@ async def delete_message(message_id: uuid.UUID, db: AsyncSession = Depends(get_d
     if not deleted:
         raise HTTPException(status_code=404, detail="Message not found")
     return {"status": "success", "message": f"Message {message_id} deleted successfully"}
+
 
 @router.put("/message/{message_id}", response_model=ConversationMessageResponse)
 async def update_message(
