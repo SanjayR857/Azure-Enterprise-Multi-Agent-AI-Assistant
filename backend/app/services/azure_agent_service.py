@@ -18,7 +18,7 @@ class AzureAgentService:
     This service initializes the language model (LLM) and provides
     a simple chat interface using either Azure OpenAI or Ollama.
     """
-
+    
     def __init__(self):
         """
         Initializes the AgentService with the configured LLM provider.

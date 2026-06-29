@@ -6,7 +6,9 @@ import logging
 from datetime import datetime
 # pyre-ignore [missing-import]
 from fastapi import UploadFile, HTTPException
+# pyrefly: ignore [missing-import]
 import azure.cosmos.aio as cosmos
+# pyrefly: ignore [missing-import]
 import azure.cosmos.exceptions as exceptions
 
 logger = logging.getLogger(__name__)

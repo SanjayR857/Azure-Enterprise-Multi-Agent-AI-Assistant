@@ -26,3 +26,5 @@ botocore>=1.43.18  # Low-level SDK interface to Amazon Web Services (AWS) servic
 langgraph-checkpoint>=0.4.0  # Checkpointing for LangGraph to persist state
 azure-cosmos>=4.5.1  # Azure Cosmos DB NoSQL Python SDK
 langchain-azure-ai>=1.2.7 # langchain azure ai for integration with azure openai
+azure-storage-blob>=12.15.0 #azure blob storage for file storage
+azure-identity>=1.17.0 #azure identity for authentication

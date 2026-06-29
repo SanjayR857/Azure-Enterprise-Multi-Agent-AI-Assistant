@@ -3,7 +3,9 @@ import logging
 import uuid
 import asyncio
 from datetime import datetime
+# pyrefly: ignore [missing-import]
 import azure.cosmos.aio as cosmos
+# pyrefly: ignore [missing-import]
 import azure.cosmos.exceptions as exceptions
 
 logger = logging.getLogger(__name__)

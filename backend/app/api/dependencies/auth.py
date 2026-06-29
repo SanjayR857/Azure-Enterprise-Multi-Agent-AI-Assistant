@@ -1,6 +1,8 @@
 # pyrefly: ignore [missing-import]
 from fastapi import Security, Depends
+# pyrefly: ignore [missing-import]
 import azure.cosmos.aio as cosmos
+# pyrefly: ignore [missing-import]
 import azure.cosmos.exceptions as exceptions
 from datetime import datetime
 import uuid
