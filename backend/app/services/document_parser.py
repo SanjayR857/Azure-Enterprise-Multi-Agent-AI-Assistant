@@ -27,6 +27,7 @@ vector_store = Chroma(
 
 class DocumentParserService:
     def extract_text(self, file_path: str, ext: str) -> str:
+        logger.info(f"Starting text extraction for {file_path} with extension {ext}")
         text = ""
         try:
             if ext == ".pdf":
@@ -53,6 +54,7 @@ class DocumentParserService:
         except Exception as e:
             logger.error(f"Error parsing {file_path}: {str(e)}")
             
+        logger.info(f"Finished extracting text from {file_path}, total length: {len(text)}")
         return text
 
     async def process_and_index(self, db_document: dict):
@@ -60,6 +62,7 @@ class DocumentParserService:
         Extracts text from the physical file, chunks it, and saves to Vector DB.
         """
         original_filename = db_document["original_filename"]
+        logger.info(f"Starting process_and_index for document: {original_filename}")
         # Get the extension
         ext = original_filename[original_filename.rfind("."):].lower()
         

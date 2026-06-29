@@ -7,14 +7,16 @@ import azure.cosmos.aio as cosmos
 import azure.cosmos.exceptions as exceptions
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-class ConversationService:
+class AzureCosmosDBService:
     """
     Service class handling operations related to conversation history persistence and retrieval
     using Azure Cosmos DB NoSQL.
     """
 
     async def create_session(self, container: cosmos.ContainerProxy, user_id: uuid.UUID, session_id: uuid.UUID = None, title: str = None) -> dict:
+        logger.info(f"Creating session for user {user_id} with title '{title}'")
         final_title = title
         if title:
             try:
@@ -45,17 +47,21 @@ class ConversationService:
         
         try:
             await container.create_item(body=session_doc)
+            logger.info(f"Successfully created session {doc_id}")
             return session_doc
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to create chat session document: {e}")
             raise e
 
     async def get_session(self, container: cosmos.ContainerProxy, session_id: uuid.UUID, user_id: uuid.UUID) -> dict | None:
+        logger.info(f"Retrieving session {session_id} for user {user_id}")
         try:
             # We partition by user_id
             response = await container.read_item(item=str(session_id), partition_key=str(user_id))
+            logger.info(f"Successfully retrieved session {session_id}")
             return response
         except exceptions.CosmosResourceNotFoundError:
+            logger.warning(f"Session {session_id} not found")
             return None
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to get chat session: {e}")
@@ -71,6 +77,7 @@ class ConversationService:
         Retrieve all standalone message documents for a specific session.
         Returns messages ordered by sequence_number ASC (oldest first).
         """
+        logger.info(f"Retrieving messages for session {session_id}")
         try:
             # Query all messages for the session (very fast via index on session_id)
             query = "SELECT * FROM c WHERE c.type = 'message' AND c.session_id = @session_id"
@@ -83,6 +90,7 @@ class ConversationService:
             # Sort in memory by sequence_number (fast for typical chat lengths)
             items.sort(key=lambda x: x.get("sequence_number", 0))
             
+            logger.info(f"Retrieved {len(items)} messages for session {session_id}")
             return items
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to retrieve messages for session {session_id}: {e}")
@@ -91,10 +99,12 @@ class ConversationService:
 
     async def get_message_count_for_session(self, container: cosmos.ContainerProxy, session_id: uuid.UUID, user_id: uuid.UUID) -> int:
         """Get the total count of standalone messages for a session (used for pagination metadata)."""
+        logger.info(f"Getting message count for session {session_id}")
         try:
             query = "SELECT VALUE COUNT(1) FROM c WHERE c.type = 'message' AND c.session_id = @session_id"
             parameters = [{"name": "@session_id", "value": str(session_id)}]
             async for item in container.query_items(query=query, parameters=parameters, partition_key=str(user_id)):
+                logger.info(f"Counted {item} messages for session {session_id}")
                 return item  # COUNT returns a single integer
             return 0
         except exceptions.CosmosHttpResponseError as e:
@@ -103,6 +113,7 @@ class ConversationService:
 
     async def get_all_sessions_and_messages(self, container: cosmos.ContainerProxy, user_id: uuid.UUID) -> tuple[list[dict], list[dict]]:
         """Retrieve all sessions and all standalone messages for the user efficiently."""
+        logger.info(f"Retrieving all sessions and messages for user {user_id}")
         try:
             query = "SELECT * FROM c WHERE c.type IN ('session', 'message') AND c.user_id = @user_id"
             parameters = [{"name": "@user_id", "value": str(user_id)}]
@@ -118,6 +129,7 @@ class ConversationService:
             
             # Sort sessions by created_at DESC
             sessions.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+            logger.info(f"Retrieved {len(sessions)} sessions and {len(messages)} messages for user {user_id}")
             return sessions, messages
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to retrieve all sessions and messages: {e}")
@@ -125,6 +137,7 @@ class ConversationService:
 
     async def get_all_sessions(self, container: cosmos.ContainerProxy, user_id: uuid.UUID) -> list[dict]:
         """Retrieve all session documents (metadata only, no messages) for the user."""
+        logger.info(f"Retrieving all sessions for user {user_id}")
         try:
             query = "SELECT c.id, c.title, c.is_pinned, c.created_at FROM c WHERE c.type = 'session' AND c.user_id = @user_id ORDER BY c.created_at DESC"
             parameters = [{"name": "@user_id", "value": str(user_id)}]
@@ -132,6 +145,7 @@ class ConversationService:
             items = []
             async for item in container.query_items(query=query, parameters=parameters, partition_key=str(user_id)):
                 items.append(item)
+            logger.info(f"Retrieved {len(items)} sessions for user {user_id}")
             return items
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to retrieve all sessions: {e}")
@@ -146,6 +160,7 @@ class ConversationService:
         content: str, 
         sequence_number: int
     ) -> dict:
+        logger.info(f"Adding {role} message to session {session_id} (seq: {sequence_number})")
         message_doc = {
             "id": str(uuid.uuid4()),
             "type": "message",
@@ -159,12 +174,14 @@ class ConversationService:
         
         try:
             await container.create_item(body=message_doc)
+            logger.info(f"Successfully added message {message_doc['id']}")
             return message_doc
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to add message to document: {e}")
             raise e
 
     async def delete_session(self, container: cosmos.ContainerProxy, session_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+        logger.info(f"Deleting session {session_id} for user {user_id}")
         try:
             # Delete session doc
             await container.delete_item(item=str(session_id), partition_key=str(user_id))
@@ -174,20 +191,24 @@ class ConversationService:
             for msg in messages:
                 try:
                     await container.delete_item(item=msg["id"], partition_key=str(user_id))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Failed to delete standalone message {msg['id']} during cascade delete: {e}")
             
+            logger.info(f"Successfully deleted session {session_id} and its messages")
             return True
         except exceptions.CosmosResourceNotFoundError:
+            logger.warning(f"Session {session_id} not found for deletion")
             return False
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to delete session {session_id}: {e}")
             raise e
 
     async def delete_message(self, container: cosmos.ContainerProxy, message_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+        logger.info(f"Deleting message {message_id} for user {user_id}")
         # Try deleting standalone message first
         try:
             await container.delete_item(item=str(message_id), partition_key=str(user_id))
+            logger.info(f"Successfully deleted standalone message {message_id}")
             return True
         except exceptions.CosmosResourceNotFoundError:
             pass # Fall through to legacy embedded logic
@@ -195,6 +216,7 @@ class ConversationService:
             logger.error(f"Failed to delete standalone message {message_id}: {e}")
             
         # Legacy embedded logic
+        logger.info(f"Falling back to legacy embedded logic for deleting message {message_id}")
         try:
             query = "SELECT * FROM c WHERE c.type = 'session' AND c.user_id = @user_id"
             parameters = [{"name": "@user_id", "value": str(user_id)}]
@@ -206,7 +228,9 @@ class ConversationService:
                 
                 if len(doc["messages"]) < original_len:
                     await container.replace_item(item=doc["id"], body=doc)
+                    logger.info(f"Successfully deleted embedded message {message_id} from session {doc['id']}")
                     return True
+            logger.warning(f"Message {message_id} not found in embedded messages")
             return False
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to delete embedded message {message_id}: {e}")
@@ -219,12 +243,14 @@ class ConversationService:
         content: str,
         user_id: uuid.UUID
     ) -> dict | None:
+        logger.info(f"Updating message {message_id} for user {user_id}")
         # Try updating standalone message first
         try:
             msg_doc = await container.read_item(item=str(message_id), partition_key=str(user_id))
             if msg_doc.get("type") == "message":
                 msg_doc["content"] = content
                 await container.replace_item(item=msg_doc["id"], body=msg_doc)
+                logger.info(f"Successfully updated standalone message {message_id}")
                 return msg_doc
         except exceptions.CosmosResourceNotFoundError:
             pass # Fall through to legacy embedded logic
@@ -232,6 +258,7 @@ class ConversationService:
             logger.error(f"Failed to update standalone message {message_id}: {e}")
 
         # Legacy embedded logic
+        logger.info(f"Falling back to legacy embedded logic for updating message {message_id}")
         try:
             query = "SELECT * FROM c WHERE c.type = 'session' AND c.user_id = @user_id"
             parameters = [{"name": "@user_id", "value": str(user_id)}]
@@ -248,10 +275,12 @@ class ConversationService:
                     await container.replace_item(item=doc["id"], body=doc)
                     # Inject parent session id into the returned message dict
                     m["session_id"] = doc["id"]
+                    logger.info(f"Successfully updated embedded message {message_id} in session {doc['id']}")
                     return m
+            logger.warning(f"Message {message_id} not found in embedded messages")
             return None
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to update message {message_id}: {e}")
             raise e
 
-conversation_service = ConversationService()
+azure_cosmos_db_service = AzureCosmosDBService()

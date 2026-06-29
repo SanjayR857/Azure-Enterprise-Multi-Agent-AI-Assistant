@@ -42,7 +42,13 @@ class AzureAgentService:
         """
         Simple chat function that uses the LLM to generate a response.
         """
-        result = self.model.invoke(prompt)
-        return result.content
+        logger.info(f"Running chat with prompt length: {len(prompt)}")
+        try:
+            result = self.model.invoke(prompt)
+            logger.info("Successfully generated chat response")
+            return result.content
+        except Exception as e:
+            logger.error(f"Failed to generate chat response: {e}")
+            raise e
 
 azure_agent_service = AzureAgentService()

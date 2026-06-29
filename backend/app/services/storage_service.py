@@ -25,9 +25,11 @@ class StorageService:
         """
         Validates the file, securely saves it to disk, and tracks it in the Cosmos DB.
         """
+        logger.info(f"Starting file upload for {file.filename} by user {user_id}")
         # validation the file extension
         ext = Path(file.filename).suffix.lower()
         if ext not in ALLOWED_EXTENSIONS:
+            logger.error(f"Upload failed: Unsupported file type {ext}")
             raise HTTPException(status_code=400, detail=f"Unsupported file type:{ext}")
         # validation the file size
         await file.seek(0,2)
@@ -35,12 +37,14 @@ class StorageService:
         await file.seek(0)
 
         if file_size > (MAX_FILE_SIZE_MB * 1024 * 1024):
+            logger.error(f"Upload failed: File size {file_size} exceeds {MAX_FILE_SIZE_MB}MB limit")
             raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB} MB")
         
         # save the physical file securely 
         secure_filename = f"{uuid.uuid4()}{ext}"
         file_path = UPLOAD_DIR / secure_filename
 
+        logger.info(f"Saving physical file to {file_path}")
         # we use a standard file write loop to save the chunks safely
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -63,6 +67,7 @@ class StorageService:
         
         try:
             await container.create_item(body=document_doc)
+            logger.info(f"Successfully saved document metadata for {doc_id} to Cosmos DB")
             return document_doc
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to save document metadata: {e}")
