@@ -63,12 +63,21 @@ class Settings(BaseSettings):
     AZURE_OPENAI_MAX_TOKENS: int = int(os.getenv("AZURE_OPENAI_MAX_TOKENS", "1000"))
     AZURE_OPENAI_TEMPERATURE: float = float(os.getenv("AZURE_OPENAI_TEMPERATURE", "0.0"))
 
-    # Postgres DB Config
+    # Database Provider Toggle (postgres or azure_cosmos)
+    DB_PROVIDER: str = os.getenv("DB_PROVIDER", "postgres")
+
+    # Postgres DB Config (Local/Default)
     POSTGRES_USER: str = os.getenv("POSTGRES_USER")
     POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD")
     POSTGRES_SERVER: str = os.getenv("POSTGRES_SERVER")
     POSTGRES_PORT: str = os.getenv("POSTGRES_PORT")
     POSTGRES_DB: str = os.getenv("POSTGRES_DB")
+
+    # Azure Cosmos DB NoSQL Config
+    AZURE_COSMOS_ENDPOINT: str = os.getenv("AZURE_COSMOS_ENDPOINT", "https://localhost:8081/")
+    AZURE_COSMOS_KEY: str = os.getenv("AZURE_COSMOS_KEY", "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==")
+    AZURE_COSMOS_DATABASE: str = os.getenv("AZURE_COSMOS_DATABASE", "EnterpriseAI")
+    AZURE_COSMOS_CONTAINER: str = os.getenv("AZURE_COSMOS_CONTAINER", "Conversations")
 
     # Web Search
     TAVILY_API_KEY: str | None = os.getenv("TAVILY_API_KEY")

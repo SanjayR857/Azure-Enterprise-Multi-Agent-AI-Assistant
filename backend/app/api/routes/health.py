@@ -1,7 +1,6 @@
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import text
+import azure.cosmos.aio as cosmos
 from app.database.session import get_db
 
 router = APIRouter(
@@ -10,12 +9,13 @@ router = APIRouter(
 )
 
 @router.get("")
-async def health(db: AsyncSession = Depends(get_db)):
+async def health(container: cosmos.ContainerProxy = Depends(get_db)):
     """
-    Checks the health of the application and the database.
+    Checks the health of the application and the Cosmos DB connection.
     """
     try:
-        await db.execute(text("SELECT 1"))
+        # Read the container properties to verify connectivity
+        await container.read()
         return {"status": "healthy", "database": "up"}
     except Exception as e:
         raise HTTPException(status_code=503, detail="Database connection failed")

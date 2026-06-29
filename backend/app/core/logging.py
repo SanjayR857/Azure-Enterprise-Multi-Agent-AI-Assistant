@@ -97,7 +97,7 @@ def setup_logging() -> None:
                 "level": log_level,
                 "propagate": False,
             },
-            "sqlalchemy.engine": {
+            "azure.cosmos": {
                 "handlers": ["default"],
                 "level": "WARNING",
                 "propagate": False,

@@ -12,6 +12,7 @@ setup_logging()
 import logging
 import sys
 from contextlib import asynccontextmanager
+from app.database.session import init_db
 from app.services.mcp_service import mcp_service
 
 logger = logging.getLogger(__name__)
@@ -29,13 +30,10 @@ async def lifespan(app: FastAPI):
     await azure_scheme.openid_config.load_config()
     logger.info("OpenID config loaded successfully.")
 
-    # Initialize database tables
-    logger.info("Initializing database tables...")
-    from app.database.session import engine
-    from app.models import Base
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables verified/created successfully.")
+    # Initialize Cosmos DB NoSQL database and container
+    logger.info("Initializing Cosmos DB NoSQL tables...")
+    await init_db()
+    logger.info("Cosmos DB NoSQL tables verified/created successfully.")
 
     # Register and connect MCP servers
     logger.info("Registering MCP servers...")
@@ -53,9 +51,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down FastAPI application...")
-    logger.info("Disposing database connection pool...")
-    await engine.dispose()
-    logger.info("Database connection pool disposed. Shutdown complete.")
+    logger.info("Shutdown complete.")
 
 app = FastAPI(
     title="Enterprise Multi-Agent AI Assistant",

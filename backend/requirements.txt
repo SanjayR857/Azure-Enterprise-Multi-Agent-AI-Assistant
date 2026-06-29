@@ -24,7 +24,5 @@ pypdf>=0.1.7  # Pure-Python PDF library capable of splitting, merging, and extra
 chromadb>=1.5.9  # Open-source AI application database/vector database for embeddings
 botocore>=1.43.18  # Low-level SDK interface to Amazon Web Services (AWS) services
 langgraph-checkpoint>=0.4.0  # Checkpointing for LangGraph to persist state
-sqlalchemy  # its a ORM that is used for database integration 
-asyncpg>=0.31.0 # async pgsql driver for postgresql
-psycopg2-binary>=2.9.12 # sync pgsql driver for postgresql
-langchain-azure-ai>=1.2.7 # langchain azure ai for integration with azure openai and azure openai search
+azure-cosmos>=4.5.1  # Azure Cosmos DB NoSQL Python SDK
+langchain-azure-ai>=1.2.7 # langchain azure ai for integration with azure openai

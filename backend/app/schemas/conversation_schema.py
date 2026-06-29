@@ -46,17 +46,34 @@ class SessionHistoryResponse(BaseModel):
         populate_by_name=True,
     )
 
-class SessionDetails(BaseModel):
-    title: str = Field(...)
-    is_pinned: bool = Field(False)
-    messages: dict[UUID, MessageDetails] = Field(...)
+class PaginatedSessionHistoryResponse(BaseModel):
+    session_id: UUID = Field(..., alias="sessionId")
+    messages: dict[UUID, MessageDetails] = Field(..., description="Dictionary mapping message ID to message details")
+    total_messages: int = Field(..., alias="totalMessages", description="Total number of messages in this session")
+    limit: int = Field(..., description="Page size")
+    offset: int = Field(..., description="Current offset")
+    has_more: bool = Field(..., alias="hasMore", description="Whether more messages exist beyond this page")
 
     model_config = ConfigDict(
         populate_by_name=True,
     )
 
-class AllSessionsHistoryResponse(BaseModel):
-    sessions: dict[UUID, SessionDetails] = Field(..., description="Dictionary mapping session ID to its details")
+class SessionDetails(BaseModel):
+    """Metadata for a single chat session (no messages)."""
+    title: str = Field(..., description="Auto-generated or user-provided session title")
+    is_pinned: bool = Field(False, alias="isPinned", description="Whether the session is pinned to the top")
+    created_at: datetime = Field(..., alias="createdAt", description="Session creation timestamp")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
+class AllSessionsResponse(BaseModel):
+    """Response containing all session metadata for the current user."""
+    sessions: dict[UUID, SessionDetails] = Field(
+        default_factory=dict,
+        description="Dictionary mapping session ID to its metadata"
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,

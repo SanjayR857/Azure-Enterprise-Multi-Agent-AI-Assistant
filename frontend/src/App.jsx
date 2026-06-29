@@ -37,6 +37,8 @@ function MainApp() {
     loadHistory,
     sendMessage,
     deleteSession,
+    deleteMessage,
+    updateMessage,
     startNewChat,
     togglePin,
   } = useChat();
@@ -211,7 +213,13 @@ function MainApp() {
                   </div>
                 )}
                 {messages.map((msg, idx) => (
-                  <ChatMessage key={msg.id} message={msg} index={idx} />
+                  <ChatMessage 
+                    key={msg.id} 
+                    message={msg} 
+                    index={idx} 
+                    onDelete={deleteMessage} 
+                    onEdit={updateMessage} 
+                  />
                 ))}
               </>
             )}

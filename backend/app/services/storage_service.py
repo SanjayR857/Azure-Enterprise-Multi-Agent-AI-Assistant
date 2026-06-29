@@ -1,12 +1,15 @@
-from requests import status_codes
 import os
 import uuid
 from pathlib import Path
 import shutil
+import logging
+from datetime import datetime
 # pyre-ignore [missing-import]
 from fastapi import UploadFile, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Document
+import azure.cosmos.aio as cosmos
+import azure.cosmos.exceptions as exceptions
+
+logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = Path.cwd() / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -18,9 +21,9 @@ class StorageService:
         # Ensure the uploads directory exists when the service starts
         UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
 
-    async def save_upload(self, db:AsyncSession, file:UploadFile, user_id:uuid.UUID, session_id: uuid.UUID):
+    async def save_upload(self, container: cosmos.ContainerProxy, file: UploadFile, user_id: uuid.UUID, session_id: uuid.UUID) -> dict:
         """
-        Validates the file, securely saves it to disk, and tracks it in the database.
+        Validates the file, securely saves it to disk, and tracks it in the Cosmos DB.
         """
         # validation the file extension
         ext = Path(file.filename).suffix.lower()
@@ -32,9 +35,9 @@ class StorageService:
         await file.seek(0)
 
         if file_size > (MAX_FILE_SIZE_MB * 1024 * 1024):
-            raise HTTPException(status_code=413, detail="File too large. Maximum size is {MAX_FILE_SIZE_MB} MB")
+            raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB} MB")
         
-        # save the pysical file securely 
+        # save the physical file securely 
         secure_filename = f"{uuid.uuid4()}{ext}"
         file_path = UPLOAD_DIR / secure_filename
 
@@ -42,23 +45,27 @@ class StorageService:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # create the database record
-        new_doc = Document(
-            user_id=user_id,
-            session_id=session_id,
-            original_filename=file.filename,
-            storage_path=str(file_path),
-            mime_type=file.content_type,
-            file_size_bytes=file_size
-        )
-        db.add(new_doc)
-        await db.commit()
-        await db.refresh(new_doc)
-
-        return new_doc
-    
-storage_service = StorageService()
-
+        # create the database record for Cosmos DB
+        doc_id = str(uuid.uuid4())
+        user_id_str = str(user_id)
         
-    
-            
+        document_doc = {
+            "id": doc_id,
+            "type": "document",
+            "user_id": user_id_str,
+            "session_id": str(session_id),
+            "original_filename": file.filename,
+            "storage_path": str(file_path),
+            "mime_type": file.content_type,
+            "file_size_bytes": file_size,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        try:
+            await container.create_item(body=document_doc)
+            return document_doc
+        except exceptions.CosmosHttpResponseError as e:
+            logger.error(f"Failed to save document metadata: {e}")
+            raise HTTPException(status_code=500, detail="Failed to save document metadata to Cosmos DB")
+
+storage_service = StorageService()

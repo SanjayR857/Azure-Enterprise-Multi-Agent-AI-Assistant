@@ -4,7 +4,7 @@ from pypdf import PdfReader
 
 # pyrefly: ignore [missing-import]
 from docx import Document
-from app.models.document import Document as DBDocument
+
 from langchain_core.documents import Document as LangchainDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 # pyrefly: ignore [missing-import]
@@ -55,17 +55,18 @@ class DocumentParserService:
             
         return text
 
-    async def process_and_index(self, db_document: DBDocument):
+    async def process_and_index(self, db_document: dict):
         """
         Extracts text from the physical file, chunks it, and saves to Vector DB.
         """
+        original_filename = db_document["original_filename"]
         # Get the extension
-        ext = db_document.original_filename[db_document.original_filename.rfind("."):].lower()
+        ext = original_filename[original_filename.rfind("."):].lower()
         
         # 1. Extract raw text from the file
-        raw_text = self.extract_text(db_document.storage_path, ext)
+        raw_text = self.extract_text(db_document["storage_path"], ext)
         if not raw_text.strip():
-            logger.warning(f"No text extracted from {db_document.original_filename}")
+            logger.warning(f"No text extracted from {original_filename}")
             return
 
         # 2. Chop the text into ~1000 character chunks with a 200 character overlap
@@ -82,15 +83,15 @@ class DocumentParserService:
             docs.append(LangchainDocument(
                 page_content=chunk,
                 metadata={
-                    "session_id": str(db_document.session_id),
-                    "document_id": str(db_document.id),
-                    "filename": db_document.original_filename
+                    "session_id": db_document["session_id"],
+                    "document_id": db_document["id"],
+                    "filename": original_filename
                 }
             ))
 
         # 4. Embed and save to Chroma DB
         if docs:
             vector_store.add_documents(docs)
-            logger.info(f"Indexed {len(docs)} chunks for document {db_document.original_filename}")
+            logger.info(f"Indexed {len(docs)} chunks for document {db_document['original_filename']}")
 
 document_parser = DocumentParserService()

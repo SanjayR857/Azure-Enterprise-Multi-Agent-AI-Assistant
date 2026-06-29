@@ -101,33 +101,16 @@ export default function useChat() {
       const data = await res.json();
 
       // Transform the nested dict structure into an array
-      const sessionList = Object.entries(data.sessions || {}).map(([sessionId, sessionData]) => {
-        const msgArray = Object.entries(sessionData.messages || {}).map(([msgId, details]) => ({
-          id: msgId,
-          humanMessage: details.humanMessage,
-          aiMessage: details.aiMessage,
-          createdAt: details.createdAt,
-        }));
-        // Sort by createdAt
-        msgArray.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-
-        const firstMsg = msgArray[0];
-        const lastMsg = msgArray[msgArray.length - 1];
-
-        return {
-          id: sessionId,
-          title: sessionData.title || firstMsg?.humanMessage?.substring(0, 60) || 'New Chat',
-          isPinned: sessionData.is_pinned || false,
-          preview: lastMsg?.aiMessage?.substring(0, 80) || '',
-          messageCount: msgArray.length,
-          createdAt: firstMsg?.createdAt,
-          updatedAt: lastMsg?.createdAt,
-          messages: msgArray,
-        };
-      });
+      // Response now contains only session metadata (no messages)
+      const sessionList = Object.entries(data.sessions || {}).map(([sessionId, sessionData]) => ({
+        id: sessionId,
+        title: sessionData.title || 'New Chat',
+        isPinned: sessionData.isPinned || false,
+        createdAt: sessionData.createdAt,
+      }));
 
       // Sort sessions by most recent
-      sessionList.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+      sessionList.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       setSessions(sessionList);
     } catch (err) {
       setError(err.message);
@@ -135,14 +118,15 @@ export default function useChat() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [accounts, fetchWithAuth]);
 
   // ──────── LOAD HISTORY FOR A SESSION ────────
   const loadHistory = useCallback(async (sessionId) => {
     setIsLoading(true);
     setActiveSessionId(sessionId);
     try {
-      const res = await fetchWithAuth(`/conversation/history/${sessionId}`);
+      // Load all messages for the session
+      const res = await fetchWithAuth(`/conversation/${sessionId}`);
       if (!res.ok) throw new Error(`Failed to load history: ${res.status}`);
       const data = await res.json();
 
@@ -155,13 +139,14 @@ export default function useChat() {
 
       msgArray.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       setMessages(msgArray);
+
     } catch (err) {
       setError(err.message);
       console.error('Failed to load history:', err);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [fetchWithAuth]);
 
   // ──────── SEND MESSAGE ────────
   const sendMessage = useCallback(async (message, sessionId = null) => {
@@ -291,7 +276,7 @@ export default function useChat() {
   // ──────── DELETE SESSION ────────
   const deleteSession = useCallback(async (sessionId) => {
     try {
-      const res = await fetchWithAuth(`/conversation/session/${sessionId}`, { method: 'DELETE' });
+      const res = await fetchWithAuth(`/conversation/${sessionId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`Failed to delete: ${res.status}`);
 
       setSessions(prev => prev.filter(s => s.id !== sessionId));
@@ -349,12 +334,69 @@ export default function useChat() {
       });
 
       if (!res.ok) throw new Error(`Failed to update message: ${res.status}`);
+      
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("text/event-stream")) {
+        // Backend is streaming the AI response
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullResponse = "";
+        
+        // Clear AI message for streaming
+        setMessages(prev => prev.map(m => 
+          m.id === messageId ? { ...m, humanMessage: content, aiMessage: "" } : m
+        ));
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.substring(6);
+              if (!dataStr.trim()) continue;
+              
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.done) {
+                  setMessages(prev => prev.map(m => 
+                    m.id === messageId ? { ...m, aiMessage: data.response } : m
+                  ));
+                } else if (data.chunk) {
+                  fullResponse += data.chunk;
+                  setMessages(prev => prev.map(m => 
+                    m.id === messageId ? { ...m, aiMessage: fullResponse } : m
+                  ));
+                }
+              } catch (e) {
+                console.error("Error parsing update stream chunk", e, dataStr);
+              }
+            }
+          }
+        }
+      } else {
+        // Standard JSON response (e.g., when updating an assistant message)
+        const data = await res.json();
+        setMessages(prev => prev.map(m => 
+          m.id === messageId 
+            ? { 
+                ...m, 
+                humanMessage: data.humanMessage || m.humanMessage,
+                aiMessage: data.aiMessage || m.aiMessage
+              } 
+            : m
+        ));
+      }
+      
       return true;
     } catch (err) {
       setError(err.message);
       return false;
     }
-  }, []);
+  }, [fetchWithAuth]);
 
   // ──────── START NEW CHAT ────────
   const startNewChat = useCallback(() => {

@@ -1,22 +1,22 @@
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.services.azure_agent_service import azure_agent_service
 from app.utils import count_tokens
 from app.database.session import get_db
-from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.conversation_service import conversation_service
 from app.schemas.request_models import AgentRequest
-from app.schemas.response_models import AgentResponse
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, Depends
+import azure.cosmos.aio as cosmos
+# pyrefly: ignore [missing-import]
 from app.api.dependencies.auth import validate_user
-from app.models.user import User
+from app.schemas.user_schema import User
 from app.schemas.conversation_schema import (
     ConversationMessageCreate,
     ConversationMessageUpdate,
     ConversationMessageResponse,
     SessionHistoryResponse,
-    AllSessionsHistoryResponse,
+    PaginatedSessionHistoryResponse,
+    AllSessionsResponse,
     MessageDetails
 )
 import uuid
@@ -25,7 +25,7 @@ import logging
 import json
 # pyrefly: ignore [missing-import]
 from fastapi.responses import StreamingResponse
-from uuid import UUID
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -35,52 +35,44 @@ router = APIRouter(
     dependencies=[Depends(validate_user)]
 )
 
-
 @router.post("/agent")
-async def conversation(request: AgentRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
+async def conversation(request: AgentRequest, container: cosmos.ContainerProxy = Depends(get_db), current_user: User = Depends(validate_user)):
     """
     Handles incoming user messages, triggers the agent orchestrator, 
     persists the exchange to the conversation history, and returns the response.
     """
-    # 1. Run the blocking orchestrator workflow in a thread pool
     loop = asyncio.get_running_loop()
     response = await loop.run_in_executor(None, azure_agent_service.run_chat, request.message)
     
-    # 2. Track token counts
     input_tokens = count_tokens(request.message)
     output_tokens = count_tokens(response)
     
-    # 3. Determine/generate session ID
     session_id = request.session_id or uuid.uuid4()
+    logger.info(f"Incoming request.session_id: {request.session_id}, final session_id: {session_id}")
     
-    # 4. Asynchronously persist the conversation message exchange to database
     try:
-        session = await conversation_service.get_session(db, session_id, current_user.id)
+        session = await conversation_service.get_session(container, session_id, current_user.id)
         if not session:
-            session = await conversation_service.create_session(db, user_id=current_user.id, session_id=session_id, title=request.message)
-            # New session has no messages yet, so sequence starts at 0
+            session = await conversation_service.create_session(container, user_id=current_user.id, session_id=session_id, title=request.message)
             seq = 0
         else:
-            # Existing session: messages are eagerly loaded via selectinload in get_session
-            seq = len(session.messages) if session.messages else 0
+            standalone_count = await conversation_service.get_message_count_for_session(container, session_id, current_user.id)
+            seq = len(session.get("messages", [])) + standalone_count
         
         # Save user message
-        user_msg = await conversation_service.add_message(
-            db, session_id=session_id, role="user", content=request.message, sequence_number=seq
+        await conversation_service.add_message(
+            container, session_id=session_id, user_id=current_user.id, role="user", content=request.message, sequence_number=seq
         )
         
         # Save assistant message
-        ai_msg = await conversation_service.add_message(
-            db, session_id=session_id, role="assistant", content=response, sequence_number=seq+1
+        await conversation_service.add_message(
+            container, session_id=session_id, user_id=current_user.id, role="assistant", content=response, sequence_number=seq+1
         )
     except Exception as e:
         logger.error(f"Failed to persist conversation history: {str(e)}", exc_info=True)
 
 
     async def generate_stream():
-        # Yield the response in simulated chunks to provide a typing effect
-        # since the underlying graph is synchronous.
-        # In a fully async graph, this would use astream_events.
         chunk_size = 4
         for i in range(0, len(response), chunk_size):
             chunk = response[i:i+chunk_size]
@@ -108,54 +100,84 @@ def _group_messages(messages):
     formatted = {}
     
     # Sort messages by sequence_number
-    sorted_msgs = sorted(messages, key=lambda m: m.sequence_number)
+    sorted_msgs = sorted(messages, key=lambda m: m.get("sequence_number", 0))
     
     current_user_msg = None
     for msg in sorted_msgs:
-        if msg.role == "user":
+        msg_id_str = msg.get("id")
+        # Legacy messages don't have IDs, so we generate one on the fly to group them
+        msg_id = uuid.UUID(msg_id_str) if msg_id_str else uuid.uuid4()
+        
+        if msg.get("role") == "user":
             current_user_msg = msg
-            formatted[msg.id] = MessageDetails(
-                humanMessage=msg.content,
-                aiMessage=None,
-                createdAt=msg.created_at
+            current_user_msg["_temp_id"] = msg_id # Store it temporarily to link the assistant reply
+            
+            # Format datetime if available, otherwise just use current
+            dt = msg.get("created_at")
+            if dt:
+                try:
+                    dt = datetime.fromisoformat(dt)
+                except ValueError:
+                    dt = datetime.utcnow()
+            else:
+                dt = datetime.utcnow()
+
+            formatted[msg_id] = MessageDetails(
+                human_message=msg.get("content"),
+                ai_message=None,
+                created_at=dt
             )
-        elif msg.role == "assistant" and current_user_msg:
+        elif msg.get("role") == "assistant" and current_user_msg:
             # Attach to the current user message
-            formatted[current_user_msg.id].ai_message = msg.content
+            target_id = current_user_msg.get("_temp_id")
+            if target_id in formatted:
+                formatted[target_id].ai_message = msg.get("content")
             current_user_msg = None
             
     return formatted
 
 
-@router.get("/all_sessions", response_model=AllSessionsHistoryResponse)
-async def get_all_sessions(db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
+@router.get("/all_sessions", response_model=AllSessionsResponse)
+async def get_all_sessions(container: cosmos.ContainerProxy = Depends(get_db), current_user: User = Depends(validate_user)):
     """
-    Retrieves all sessions with their complete message history.
+    Retrieves all sessions (metadata only — no messages).
+    Messages are loaded on-demand via GET /history/{session_id}.
     """
-    all_sessions = await conversation_service.get_all_sessions(db, current_user.id)
-    
+    all_sessions = await conversation_service.get_all_sessions(container, current_user.id)
+            
     sessions_dict = {}
     for session in all_sessions:
-        sessions_dict[session.id] = {
-            "title": session.title or "New Chat",
-            "is_pinned": session.is_pinned,
-            "messages": _group_messages(session.messages)
+        sessions_dict[uuid.UUID(session["id"])] = {
+            "title": session.get("title", "New Chat"),
+            "isPinned": session.get("is_pinned", False),
+            "createdAt": session.get("created_at", datetime.utcnow().isoformat()),
         }
         
-    return AllSessionsHistoryResponse(sessions=sessions_dict)
+    return AllSessionsResponse(sessions=sessions_dict)
 
 
-@router.get("/history/{session_id}", response_model=SessionHistoryResponse)
-async def get_history(session_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
+@router.get("/{session_id}", response_model=SessionHistoryResponse)
+async def get_session_history(
+    session_id: uuid.UUID, 
+    container: cosmos.ContainerProxy = Depends(get_db), 
+    current_user: User = Depends(validate_user)
+):
     """
-    Retrieves the complete chat history for a specific session ID structured by message ID.
+    Retrieves full chat history for a specific session ID.
     """
-    session = await conversation_service.get_session(db, session_id, current_user.id)
+    session = await conversation_service.get_session(container, session_id, current_user.id)
     if not session:
         return SessionHistoryResponse(sessionId=session_id, messages={})
-        
-    formatted_messages = _group_messages(session.messages)
-        
+    
+    # Get legacy embedded messages (if any from old sessions)
+    legacy_messages = session.get("messages", [])
+    
+    # Get all standalone messages
+    standalone_msgs = await conversation_service.get_messages_for_session(container, session_id, current_user.id)
+    
+    combined_messages = legacy_messages + standalone_msgs
+    formatted_messages = _group_messages(combined_messages)
+    
     return SessionHistoryResponse(
         sessionId=session_id,
         messages=formatted_messages
@@ -166,59 +188,49 @@ async def get_history(session_id: uuid.UUID, db: AsyncSession = Depends(get_db),
 async def toggle_pin_session(
     session_id: uuid.UUID, 
     is_pinned: bool,
-    db: AsyncSession = Depends(get_db), 
+    container: cosmos.ContainerProxy = Depends(get_db), 
     current_user: User = Depends(validate_user)
 ):
     """
     Toggles the pinned status of a session.
     """
-    session = await conversation_service.get_session(db, session_id, current_user.id)
+    session = await conversation_service.get_session(container, session_id, current_user.id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
         
-    session.is_pinned = is_pinned
-    await db.commit()
+    session["is_pinned"] = is_pinned
+    await container.replace_item(item=session["id"], body=session)
     return {"status": "success", "is_pinned": is_pinned}
 
 
-@router.delete("/session/{session_id}")
-async def delete_session(session_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
+@router.delete("/{session_id}")
+async def delete_session(session_id: uuid.UUID, container: cosmos.ContainerProxy = Depends(get_db), current_user: User = Depends(validate_user)):
     """
     Deletes the conversation history for a specific session ID.
     """
-    deleted = await conversation_service.delete_session(db, session_id, current_user.id)
+    deleted = await conversation_service.delete_session(container, session_id, current_user.id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "success", "message": f"Session {session_id} deleted successfully"}
 
 
-@router.delete("/message/{message_id}")
-async def delete_message(message_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(validate_user)):
-    """
-    Deletes a specific message by its message ID. 
-    """
-    deleted = await conversation_service.delete_message(db, message_id, current_user.id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Message not found")
-    return {"status": "success", "message": f"Message {message_id} deleted successfully"}
-
-
-@router.put("/message/{message_id}", response_model=ConversationMessageResponse)
+@router.put("/message/{message_id}")
 async def update_message(
     message_id: uuid.UUID,
     update_data: ConversationMessageUpdate,
-    db: AsyncSession = Depends(get_db),
+    container: cosmos.ContainerProxy = Depends(get_db),
     current_user: User = Depends(validate_user)
 ):
     """
     Updates the content of a specific message by its message ID.
+    If a user message is updated, it re-runs the LLM and updates the corresponding assistant response, streaming the result.
     """
     content = update_data.human_message or update_data.ai_message
     if not content:
          raise HTTPException(status_code=400, detail="No content provided to update")
          
     updated_message = await conversation_service.update_message(
-        db, 
+        container, 
         message_id, 
         content=content,
         user_id=current_user.id
@@ -226,10 +238,64 @@ async def update_message(
     if not updated_message:
         raise HTTPException(status_code=404, detail="Message not found")
         
-    return ConversationMessageResponse(
-        id=updated_message.id,
-        sessionId=updated_message.session_id,
-        humanMessage=updated_message.content if updated_message.role == "user" else "",
-        aiMessage=updated_message.content if updated_message.role == "assistant" else "",
-        createdAt=updated_message.created_at
-    )
+    dt = datetime.utcnow()
+    try:
+        dt = datetime.fromisoformat(updated_message.get("created_at", ""))
+    except Exception:
+        pass
+
+    # If an assistant message was edited, return the standard JSON response
+    if updated_message.get("role") != "user":
+        return ConversationMessageResponse(
+            id=uuid.UUID(updated_message["id"]),
+            session_id=uuid.UUID(updated_message["session_id"]),
+            human_message="",
+            ai_message=updated_message["content"],
+            created_at=dt
+        )
+
+    # Otherwise, it's a user message: run LLM and stream the response
+    loop = asyncio.get_running_loop()
+    new_response = await loop.run_in_executor(None, azure_agent_service.run_chat, content)
+    
+    # We need to find the corresponding AI message and update its content
+    try:
+        seq = updated_message.get("sequence_number", 0)
+        session_id = updated_message.get("session_id")
+        query = "SELECT * FROM c WHERE c.type = 'message' AND c.session_id = @session_id AND c.sequence_number = @seq AND c.role = 'assistant'"
+        parameters = [
+            {"name": "@session_id", "value": session_id},
+            {"name": "@seq", "value": seq + 1}
+        ]
+        
+        ai_msg_to_update = None
+        async for doc in container.query_items(query=query, parameters=parameters, partition_key=str(current_user.id)):
+            ai_msg_to_update = doc
+            break
+            
+        if ai_msg_to_update:
+            ai_msg_to_update["content"] = new_response
+            await container.replace_item(item=ai_msg_to_update["id"], body=ai_msg_to_update)
+        else:
+            await conversation_service.add_message(
+                container, session_id=session_id, user_id=current_user.id, role="assistant", content=new_response, sequence_number=seq+1
+            )
+    except Exception as e:
+        logger.error(f"Failed to update corresponding AI message: {e}")
+
+    async def generate_stream():
+        chunk_size = 4
+        for i in range(0, len(new_response), chunk_size):
+            chunk = new_response[i:i+chunk_size]
+            yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            await asyncio.sleep(0.01)
+            
+        final_data = {
+            "done": True,
+            "response": new_response,
+            "humanMessage": content,
+            "id": str(message_id)
+        }
+        yield f"data: {json.dumps(final_data)}\n\n"
+
+    return StreamingResponse(generate_stream(), media_type="text/event-stream")
