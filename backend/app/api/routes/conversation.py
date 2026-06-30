@@ -4,13 +4,13 @@ from app.services.azure_agent_service import azure_agent_service
 from app.utils import count_tokens
 from app.database.session import get_db
 from app.services.azure_cosmos_db_service import azure_cosmos_db_service
-from app.schemas.request_models import AgentRequest
 # pyrefly: ignore [missing-import]
 import azure.cosmos.aio as cosmos
 # pyrefly: ignore [missing-import]
 from app.api.dependencies.auth import validate_user
 from app.schemas.user_schema import User
 from app.schemas.conversation_schema import (
+    AgentRequest,
     ConversationMessageCreate,
     ConversationMessageUpdate,
     ConversationMessageResponse,
@@ -30,12 +30,12 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
-    prefix="/conversation",
-    tags=["conversation"],
+    prefix="/conversations",
+    tags=["conversations"],
     dependencies=[Depends(validate_user)]
 )
 
-@router.post("/agent")
+@router.post("")
 async def conversation(request: AgentRequest, container: cosmos.ContainerProxy = Depends(get_db), current_user: User = Depends(validate_user)):
     """
     Handles incoming user messages, triggers the agent orchestrator, 
@@ -74,7 +74,7 @@ async def conversation(request: AgentRequest, container: cosmos.ContainerProxy =
 
 
     async def generate_stream():
-        chunk_size = 4
+        chunk_size = 100
         for i in range(0, len(response), chunk_size):
             chunk = response[i:i+chunk_size]
             yield f"data: {json.dumps({'chunk': chunk})}\n\n"
@@ -138,7 +138,7 @@ def _group_messages(messages):
     return formatted
 
 
-@router.get("/all_sessions", response_model=AllSessionsResponse)
+@router.get("", response_model=AllSessionsResponse)
 async def get_all_sessions(container: cosmos.ContainerProxy = Depends(get_db), current_user: User = Depends(validate_user)):
     """
     Retrieves all sessions (metadata only — no messages).
@@ -186,7 +186,7 @@ async def get_session_history(
     )
 
 
-@router.patch("/session/{session_id}/pin")
+@router.patch("/{session_id}/pin")
 async def toggle_pin_session(
     session_id: uuid.UUID, 
     is_pinned: bool,
@@ -217,8 +217,9 @@ async def delete_session(session_id: uuid.UUID, container: cosmos.ContainerProxy
     return {"status": "success", "message": f"Session {session_id} deleted successfully"}
 
 
-@router.put("/message/{message_id}")
+@router.put("/{session_id}/messages/{message_id}")
 async def update_message(
+    session_id: uuid.UUID,
     message_id: uuid.UUID,
     update_data: ConversationMessageUpdate,
     container: cosmos.ContainerProxy = Depends(get_db),

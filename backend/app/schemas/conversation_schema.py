@@ -2,6 +2,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from uuid import UUID
 
+class AgentRequest(BaseModel):
+    session_id: UUID | None = Field(None, alias="sessionId")
+    message: str
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
 class ConversationMessageCreate(BaseModel):
     session_id: UUID = Field(..., alias="sessionId")
     human_message: str = Field(..., alias="humanMessage")
@@ -29,9 +37,9 @@ class ConversationMessageUpdate(BaseModel):
 
 
 class MessageDetails(BaseModel):
-    human_message: str = Field(..., alias="humanMessage")
-    ai_message: str | None = Field(None, alias="aiMessage")
-    created_at: datetime = Field(..., alias="createdAt")
+    human_message: str = Field(..., validation_alias="humanMessage", serialization_alias="humanMessage")
+    ai_message: str | None = Field(None, validation_alias="aiMessage", serialization_alias="aiMessage")
+    created_at: datetime = Field(..., validation_alias="createdAt", serialization_alias="createdAt")
 
     model_config = ConfigDict(
         populate_by_name=True,

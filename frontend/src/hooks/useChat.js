@@ -96,7 +96,7 @@ export default function useChat() {
     if (accounts.length === 0) return; // Wait for auth
     setIsLoading(true);
     try {
-      const res = await fetchWithAuth(`/conversation/all_sessions`);
+      const res = await fetchWithAuth(`/conversations`);
       if (!res.ok) throw new Error(`Failed to load sessions: ${res.status}`);
       const data = await res.json();
 
@@ -126,7 +126,7 @@ export default function useChat() {
     setActiveSessionId(sessionId);
     try {
       // Load all messages for the session
-      const res = await fetchWithAuth(`/conversation/${sessionId}`);
+      const res = await fetchWithAuth(`/conversations/${sessionId}`);
       if (!res.ok) throw new Error(`Failed to load history: ${res.status}`);
       const data = await res.json();
 
@@ -168,7 +168,7 @@ export default function useChat() {
       const body = { message };
       if (sessionId) body.session_id = sessionId;
 
-      const res = await fetchWithAuth(`/conversation/agent`, {
+      const res = await fetchWithAuth(`/conversations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -276,7 +276,7 @@ export default function useChat() {
   // ──────── DELETE SESSION ────────
   const deleteSession = useCallback(async (sessionId) => {
     try {
-      const res = await fetchWithAuth(`/conversation/${sessionId}`, { method: 'DELETE' });
+      const res = await fetchWithAuth(`/conversations/${sessionId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`Failed to delete: ${res.status}`);
 
       setSessions(prev => prev.filter(s => s.id !== sessionId));
@@ -295,7 +295,7 @@ export default function useChat() {
   // ──────── TOGGLE PIN ────────
   const togglePin = useCallback(async (sessionId, currentPinnedState) => {
     try {
-      const res = await fetchWithAuth(`/conversation/session/${sessionId}/pin?is_pinned=${!currentPinnedState}`, { method: 'PATCH' });
+      const res = await fetchWithAuth(`/conversations/${sessionId}/pin?is_pinned=${!currentPinnedState}`, { method: 'PATCH' });
       if (!res.ok) throw new Error(`Failed to pin/unpin: ${res.status}`);
 
       setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, isPinned: !currentPinnedState } : s));
@@ -309,7 +309,7 @@ export default function useChat() {
   // ──────── DELETE MESSAGE ────────
   const deleteMessage = useCallback(async (messageId) => {
     try {
-      const res = await fetchWithAuth(`/conversation/message/${messageId}`, { method: 'DELETE' });
+      const res = await fetchWithAuth(`/conversations/${activeSessionId}/messages/${messageId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`Failed to delete message: ${res.status}`);
 
       setMessages(prev => prev.filter(m => m.id !== messageId));
@@ -318,7 +318,7 @@ export default function useChat() {
       setError(err.message);
       return false;
     }
-  }, []);
+  }, [activeSessionId]);
 
   // ──────── UPDATE MESSAGE ────────
   const updateMessage = useCallback(async (messageId, content, role = 'user') => {
@@ -327,7 +327,7 @@ export default function useChat() {
         ? { humanMessage: content }
         : { aiMessage: content };
 
-      const res = await fetchWithAuth(`/conversation/message/${messageId}`, {
+      const res = await fetchWithAuth(`/conversations/${activeSessionId}/messages/${messageId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -396,7 +396,7 @@ export default function useChat() {
       setError(err.message);
       return false;
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, activeSessionId]);
 
   // ──────── START NEW CHAT ────────
   const startNewChat = useCallback(() => {

@@ -1,4 +1,5 @@
 # Add your dependencies here
+fastapi>=0.104.1 # Modern, fast web framework for building APIs with Python
 langchain>=1.1.3  # LLM orchestration framework to build applications with LLMs
 langchain-openai>=1.1.1  # OpenAI integration for LangChain to use GPT models
 python-dotenv>=1.2.0  # Loads environment variables from a .env file
@@ -21,8 +22,6 @@ uvicorn[standard]  # Lightning-fast ASGI server implementation to run FastAPI ap
 tiktoken>=0.5.0  # Fast BPE tokeniser for use with OpenAI's models
 langchain-chroma>=1.1.0  # Chroma vector database integration for LangChain
 pypdf>=0.1.7  # Pure-Python PDF library capable of splitting, merging, and extracting data
-chromadb>=1.5.9  # Open-source AI application database/vector database for embeddings
-botocore>=1.43.18  # Low-level SDK interface to Amazon Web Services (AWS) services
 langgraph-checkpoint>=0.4.0  # Checkpointing for LangGraph to persist state
 azure-cosmos>=4.5.1  # Azure Cosmos DB NoSQL Python SDK
 langchain-azure-ai>=1.2.7 # langchain azure ai for integration with azure openai
