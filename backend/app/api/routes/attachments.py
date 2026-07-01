@@ -29,7 +29,7 @@ async def upload_attachment(
     current_user: User = Depends(validate_user),
     blob_service: AzureBlobStorageService = Depends(get_blob_service)
 ):
-    logger.info(f"Received attachment upload: {file.filename} for session {session_id}")
+    logger.info("Received attachment upload", extra={"filename": file.filename, "session_id": str(session_id), "user_id": str(current_user.id)})
     
     ext = Path(file.filename or "").suffix.lower()
     if ext not in settings.ALLOWED_ATTACHMENT_EXTENSIONS:
@@ -70,7 +70,7 @@ async def upload_attachment(
         
         # Save to Cosmos DB
         await container.create_item(body=attachment_doc)
-        logger.info(f"Successfully saved attachment metadata to Cosmos DB")
+        logger.info("Successfully saved attachment metadata to Cosmos DB", extra={"attachment_id": attachment_id, "session_id": str(session_id), "user_id": str(current_user.id)})
         
         # Return the data that perfectly matches our AttachmentResponse Pydantic schema!
         return AttachmentResponse(
@@ -82,7 +82,7 @@ async def upload_attachment(
         )
         
     except Exception as e:
-        logger.error(f"Error during attachment upload: {e}")
+        logger.error("Error during attachment upload", extra={"error": str(e), "session_id": str(session_id), "user_id": str(current_user.id)})
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @router.get("/{attachment_id}/download")
@@ -133,7 +133,7 @@ async def delete_attachment(
     current_user: User = Depends(validate_user),
     blob_service: AzureBlobStorageService = Depends(get_blob_service)
 ):
-    logger.info(f"Received request to delete attachment: {attachment_id}")
+    logger.info("Received request to delete attachment", extra={"attachment_id": str(attachment_id), "user_id": str(current_user.id)})
     try:
         from typing import Any
         query = "SELECT * FROM c WHERE c.id = @id AND c.type = 'attachment'"
@@ -156,7 +156,7 @@ async def delete_attachment(
             try:
                 await blob_service.delete_file("chat-attachments", blob_name)
             except Exception as e:
-                logger.error(f"Failed to delete blob {blob_name}: {e}")
+                logger.error("Failed to delete blob", extra={"blob_name": blob_name, "error": str(e), "attachment_id": str(attachment_id), "user_id": str(current_user.id)})
                 # We can still proceed to delete the DB record if the blob is missing
                 
         # 2. Delete from Cosmos DB

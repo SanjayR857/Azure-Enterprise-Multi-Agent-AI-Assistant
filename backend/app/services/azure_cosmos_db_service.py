@@ -18,7 +18,7 @@ class AzureCosmosDBService:
     """
 
     async def create_session(self, container: cosmos.ContainerProxy, user_id: uuid.UUID, session_id: uuid.UUID = None, title: str = None) -> dict:
-        logger.info(f"Creating session for user {user_id} with title '{title}'")
+        logger.info("Creating session", extra={"user_id": str(user_id), "title": title})
         final_title = title
         if title:
             try:
@@ -30,9 +30,9 @@ class AzureCosmosDBService:
                     final_title = cleaned_title
                 else:
                     final_title = title[:50]
-                logger.info(f"Generated title: {final_title}")
+                logger.info("Generated title", extra={"generated_title": final_title, "original_title": title})
             except Exception as e:
-                logger.error(f"Title generation failed: {e}")
+                logger.error("Title generation failed", extra={"error": str(e), "original_title": title})
                 final_title = title[:50]
         
         doc_id = str(session_id or uuid.uuid4())
@@ -49,24 +49,24 @@ class AzureCosmosDBService:
         
         try:
             await container.create_item(body=session_doc)
-            logger.info(f"Successfully created session {doc_id}")
+            logger.info("Successfully created session", extra={"session_id": doc_id, "user_id": str(user_id)})
             return session_doc
         except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to create chat session document: {e}")
+            logger.error("Failed to create chat session document", extra={"session_id": doc_id, "user_id": str(user_id), "error": str(e)})
             raise e
 
     async def get_session(self, container: cosmos.ContainerProxy, session_id: uuid.UUID, user_id: uuid.UUID) -> dict | None:
-        logger.info(f"Retrieving session {session_id} for user {user_id}")
+        logger.info("Retrieving session", extra={"session_id": str(session_id), "user_id": str(user_id)})
         try:
             # We partition by user_id
             response = await container.read_item(item=str(session_id), partition_key=str(user_id))
-            logger.info(f"Successfully retrieved session {session_id}")
+            logger.info("Successfully retrieved session", extra={"session_id": str(session_id), "user_id": str(user_id)})
             return response
         except exceptions.CosmosResourceNotFoundError:
-            logger.warning(f"Session {session_id} not found")
+            logger.warning("Session not found", extra={"session_id": str(session_id), "user_id": str(user_id)})
             return None
         except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to get chat session: {e}")
+            logger.error("Failed to get chat session", extra={"session_id": str(session_id), "user_id": str(user_id), "error": str(e)})
             raise e
 
     async def get_messages_for_session(
@@ -79,7 +79,7 @@ class AzureCosmosDBService:
         Retrieve all standalone message documents for a specific session.
         Returns messages ordered by sequence_number ASC (oldest first).
         """
-        logger.info(f"Retrieving messages for session {session_id}")
+        logger.info("Retrieving messages for session", extra={"session_id": str(session_id), "user_id": str(user_id)})
         try:
             # Query all messages for the session (very fast via index on session_id)
             query = "SELECT * FROM c WHERE c.type = 'message' AND c.session_id = @session_id"
@@ -92,31 +92,31 @@ class AzureCosmosDBService:
             # Sort in memory by sequence_number (fast for typical chat lengths)
             items.sort(key=lambda x: x.get("sequence_number", 0))
             
-            logger.info(f"Retrieved {len(items)} messages for session {session_id}")
+            logger.info("Retrieved messages for session", extra={"session_id": str(session_id), "user_id": str(user_id), "message_count": len(items)})
             return items
         except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to retrieve messages for session {session_id}: {e}")
+            logger.error("Failed to retrieve messages for session", extra={"session_id": str(session_id), "user_id": str(user_id), "error": str(e)})
             return []
 
 
     async def get_message_count_for_session(self, container: cosmos.ContainerProxy, session_id: uuid.UUID, user_id: uuid.UUID) -> int:
         """Get the total count of standalone messages for a session (used for pagination metadata)."""
-        logger.info(f"Getting message count for session {session_id}")
+        logger.info("Getting message count for session", extra={"session_id": str(session_id), "user_id": str(user_id)})
         try:
             query = "SELECT VALUE COUNT(1) FROM c WHERE c.type = 'message' AND c.session_id = @session_id"
             parameters = [{"name": "@session_id", "value": str(session_id)}]
             async for item in container.query_items(query=query, parameters=parameters, partition_key=str(user_id)):
-                logger.info(f"Counted {item} messages for session {session_id}")
+                logger.info("Counted messages for session", extra={"session_id": str(session_id), "user_id": str(user_id), "message_count": item})
                 return item  # COUNT returns a single integer
             return 0
         except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to count messages for session {session_id}: {e}")
+            logger.error("Failed to count messages for session", extra={"session_id": str(session_id), "user_id": str(user_id), "error": str(e)})
             return 0
 
 
     async def get_all_sessions(self, container: cosmos.ContainerProxy, user_id: uuid.UUID) -> list[dict]:
         """Retrieve all session documents (metadata only, no messages) for the user."""
-        logger.info(f"Retrieving all sessions for user {user_id}")
+        logger.info("Retrieving all sessions for user", extra={"user_id": str(user_id)})
         try:
             query = "SELECT c.id, c.title, c.is_pinned, c.created_at FROM c WHERE c.type = 'session' AND c.user_id = @user_id ORDER BY c.created_at DESC"
             parameters = [{"name": "@user_id", "value": str(user_id)}]
@@ -124,10 +124,10 @@ class AzureCosmosDBService:
             items = []
             async for item in container.query_items(query=query, parameters=parameters, partition_key=str(user_id)):
                 items.append(item)
-            logger.info(f"Retrieved {len(items)} sessions for user {user_id}")
+            logger.info("Retrieved all sessions for user", extra={"user_id": str(user_id), "session_count": len(items)})
             return items
         except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to retrieve all sessions: {e}")
+            logger.error("Failed to retrieve all sessions", extra={"user_id": str(user_id), "error": str(e)})
             return []
 
     async def add_message(
@@ -140,7 +140,7 @@ class AzureCosmosDBService:
         sequence_number: int,
         attachments: list[dict] | None = None
     ) -> dict:
-        logger.info(f"Adding {role} message to session {session_id} (seq: {sequence_number})")
+        logger.info("Adding message to session", extra={"session_id": str(session_id), "user_id": str(user_id), "role": role, "sequence_number": sequence_number})
         message_doc = {
             "id": str(uuid.uuid4()),
             "type": "message",
@@ -155,14 +155,14 @@ class AzureCosmosDBService:
         
         try:
             await container.create_item(body=message_doc)
-            logger.info(f"Successfully added message {message_doc['id']}")
+            logger.info("Successfully added message", extra={"message_id": message_doc['id'], "session_id": str(session_id), "user_id": str(user_id)})
             return message_doc
         except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to add message to document: {e}")
+            logger.error("Failed to add message to document", extra={"session_id": str(session_id), "user_id": str(user_id), "error": str(e)})
             raise e
 
     async def delete_session(self, container: cosmos.ContainerProxy, session_id: uuid.UUID, user_id: uuid.UUID) -> bool:
-        logger.info(f"Deleting session {session_id} for user {user_id}")
+        logger.info("Deleting session", extra={"session_id": str(session_id), "user_id": str(user_id)})
         try:
             # Delete session doc
             await container.delete_item(item=str(session_id), partition_key=str(user_id))
@@ -173,15 +173,15 @@ class AzureCosmosDBService:
                 try:
                     await container.delete_item(item=msg["id"], partition_key=str(user_id))
                 except Exception as e:
-                    logger.error(f"Failed to delete standalone message {msg['id']} during cascade delete: {e}")
+                    logger.error("Failed to delete standalone message during cascade delete", extra={"message_id": msg['id'], "session_id": str(session_id), "user_id": str(user_id), "error": str(e)})
             
-            logger.info(f"Successfully deleted session {session_id} and its messages")
+            logger.info("Successfully deleted session and its messages", extra={"session_id": str(session_id), "user_id": str(user_id)})
             return True
         except exceptions.CosmosResourceNotFoundError:
-            logger.warning(f"Session {session_id} not found for deletion")
+            logger.warning("Session not found for deletion", extra={"session_id": str(session_id), "user_id": str(user_id)})
             return False
         except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to delete session {session_id}: {e}")
+            logger.error("Failed to delete session", extra={"session_id": str(session_id), "user_id": str(user_id), "error": str(e)})
             raise e
 
 
@@ -192,22 +192,22 @@ class AzureCosmosDBService:
         content: str,
         user_id: uuid.UUID
     ) -> dict | None:
-        logger.info(f"Updating message {message_id} for user {user_id}")
+        logger.info("Updating message", extra={"message_id": str(message_id), "user_id": str(user_id)})
         # Try updating standalone message first
         try:
             msg_doc = await container.read_item(item=str(message_id), partition_key=str(user_id))
             if msg_doc.get("type") == "message":
                 msg_doc["content"] = content
                 await container.replace_item(item=msg_doc["id"], body=msg_doc)
-                logger.info(f"Successfully updated standalone message {message_id}")
+                logger.info("Successfully updated standalone message", extra={"message_id": str(message_id), "user_id": str(user_id)})
                 return msg_doc
         except exceptions.CosmosResourceNotFoundError:
             pass # Fall through to legacy embedded logic
         except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to update standalone message {message_id}: {e}")
+            logger.error("Failed to update standalone message", extra={"message_id": str(message_id), "user_id": str(user_id), "error": str(e)})
 
         # Legacy embedded logic
-        logger.info(f"Falling back to legacy embedded logic for updating message {message_id}")
+        logger.info("Falling back to legacy embedded logic for updating message", extra={"message_id": str(message_id), "user_id": str(user_id)})
         try:
             query = "SELECT * FROM c WHERE c.type = 'session' AND c.user_id = @user_id"
             parameters = [{"name": "@user_id", "value": str(user_id)}]
@@ -224,12 +224,12 @@ class AzureCosmosDBService:
                     await container.replace_item(item=doc["id"], body=doc)
                     # Inject parent session id into the returned message dict
                     m["session_id"] = doc["id"]
-                    logger.info(f"Successfully updated embedded message {message_id} in session {doc['id']}")
+                    logger.info("Successfully updated embedded message", extra={"message_id": str(message_id), "session_id": doc['id'], "user_id": str(user_id)})
                     return m
-            logger.warning(f"Message {message_id} not found in embedded messages")
+            logger.warning("Message not found in embedded messages", extra={"message_id": str(message_id), "user_id": str(user_id)})
             return None
         except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to update message {message_id}: {e}")
+            logger.error("Failed to update message", extra={"message_id": str(message_id), "user_id": str(user_id), "error": str(e)})
             raise e
 
 azure_cosmos_db_service = AzureCosmosDBService()

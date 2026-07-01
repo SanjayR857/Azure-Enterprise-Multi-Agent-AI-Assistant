@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     LOG_FILE_PATH: str = os.getenv("LOG_FILE_PATH", "logs/app.log")
     LOG_FILE_MAX_BYTES: int = int(os.getenv("LOG_FILE_MAX_BYTES", "10485760"))
     LOG_FILE_BACKUP_COUNT: int = int(os.getenv("LOG_FILE_BACKUP_COUNT", "5"))
+    APPLICATIONINSIGHTS_CONNECTION_STRING: str | None = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
     
     # Attachments
     ALLOWED_ATTACHMENT_EXTENSIONS: set[str] = {'.pdf', '.png', '.jpg', '.jpeg', '.mp4', '.mov', '.txt', '.csv'}

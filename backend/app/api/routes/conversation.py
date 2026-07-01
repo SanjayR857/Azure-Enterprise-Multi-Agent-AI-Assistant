@@ -39,9 +39,9 @@ async def conversation(request: AgentRequest, container: cosmos.ContainerProxy =
     Handles incoming user messages, triggers the agent orchestrator, 
     persists the exchange to the conversation history, and returns the response.
     """
-    logger.info(f"Received new chat message from user {current_user.id} for session {request.session_id}")
+    logger.info("Received new chat message", extra={"user_id": str(current_user.id), "session_id": str(request.session_id)})
     session_id = request.session_id or uuid.uuid4()
-    logger.info(f"Incoming request.session_id: {request.session_id}, final session_id: {session_id}")
+    logger.info("Incoming request session id", extra={"request_session_id": str(request.session_id), "final_session_id": str(session_id)})
     
     try:
         session = await azure_cosmos_db_service.get_session(container, session_id, current_user.id)
@@ -57,7 +57,7 @@ async def conversation(request: AgentRequest, container: cosmos.ContainerProxy =
             container, session_id=session_id, user_id=current_user.id, role="user", content=request.message, sequence_number=seq, attachments=request.attachments
         )
     except Exception as e:
-        logger.error(f"Failed to persist user message: {str(e)}", exc_info=True)
+        logger.error("Failed to persist user message", extra={"error": str(e)}, exc_info=True)
         # We might not have seq if it failed early
         seq = 0
 
@@ -72,7 +72,7 @@ async def conversation(request: AgentRequest, container: cosmos.ContainerProxy =
                     full_response += chunk
                     yield f"data: {json.dumps({'chunk': chunk})}\n\n"
         except Exception as e:
-            logger.error(f"Error during LLM stream: {e}", exc_info=True)
+            logger.error("Error during LLM stream", extra={"error": str(e)}, exc_info=True)
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
             return
             
@@ -84,7 +84,7 @@ async def conversation(request: AgentRequest, container: cosmos.ContainerProxy =
                 container, session_id=session_id, user_id=current_user.id, role="assistant", content=full_response, sequence_number=seq+1
             )
         except Exception as e:
-            logger.error(f"Failed to persist assistant message: {str(e)}", exc_info=True)
+            logger.error("Failed to persist assistant message", extra={"error": str(e)}, exc_info=True)
             
         final_data = {
             "done": True,
@@ -150,7 +150,7 @@ async def get_all_sessions(container: cosmos.ContainerProxy = Depends(get_db), c
     Retrieves all sessions (metadata only — no messages).
     Messages are loaded on-demand via GET /history/{session_id}.
     """
-    logger.info(f"Retrieving all sessions for user {current_user.id}")
+    logger.info("Retrieving all sessions for user", extra={"user_id": str(current_user.id)})
     all_sessions = await azure_cosmos_db_service.get_all_sessions(container, current_user.id)
             
     sessions_dict = {}
@@ -216,7 +216,7 @@ async def delete_session(session_id: uuid.UUID, container: cosmos.ContainerProxy
     """
     Deletes the conversation history for a specific session ID.
     """
-    logger.info(f"Received request to delete session {session_id} from user {current_user.id}")
+    logger.info("Received request to delete session", extra={"session_id": str(session_id), "user_id": str(current_user.id)})
     deleted = await azure_cosmos_db_service.delete_session(container, session_id, current_user.id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -274,7 +274,7 @@ async def update_message(
                     full_response += chunk
                     yield f"data: {json.dumps({'chunk': chunk})}\n\n"
         except Exception as e:
-            logger.error(f"Error during LLM stream in update: {e}", exc_info=True)
+            logger.error("Error during LLM stream in update", extra={"error": str(e)}, exc_info=True)
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
             return
             
@@ -301,7 +301,7 @@ async def update_message(
                     container, session_id=session_id_str, user_id=current_user.id, role="assistant", content=full_response, sequence_number=seq+1
                 )
         except Exception as e:
-            logger.error(f"Failed to update corresponding AI message: {e}")
+            logger.error("Failed to update corresponding AI message", extra={"error": str(e)})
 
         final_data = {
             "done": True,
