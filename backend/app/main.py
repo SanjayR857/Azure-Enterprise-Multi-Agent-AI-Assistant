@@ -51,6 +51,10 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down FastAPI application...")
+    from app.database.session import close_cosmos_client
+    from app.services.azure_blob_storage_service import close_blob_service
+    await close_cosmos_client()
+    await close_blob_service()
     logger.info("Shutdown complete.")
 
 app = FastAPI(

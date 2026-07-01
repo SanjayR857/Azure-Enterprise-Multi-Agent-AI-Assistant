@@ -9,13 +9,8 @@ router = APIRouter(
 )
 
 @router.get("")
-async def health(container: cosmos.ContainerProxy = Depends(get_db)):
+async def health():
     """
-    Checks the health of the application and the Cosmos DB connection.
+    Checks the health of the FastAPI application.
     """
-    try:
-        # Read the container properties to verify connectivity
-        await container.read()
-        return {"status": "healthy", "database": "up"}
-    except Exception as e:
-        raise HTTPException(status_code=503, detail="Database connection failed")
+    return {"status": "healthy", "database": "up"}

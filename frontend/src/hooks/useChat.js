@@ -135,6 +135,7 @@ export default function useChat() {
         humanMessage: details.humanMessage,
         aiMessage: details.aiMessage,
         createdAt: details.createdAt,
+        attachments: details.attachments || [],
       }));
 
       msgArray.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
@@ -149,7 +150,7 @@ export default function useChat() {
   }, [fetchWithAuth]);
 
   // ──────── SEND MESSAGE ────────
-  const sendMessage = useCallback(async (message, sessionId = null) => {
+  const sendMessage = useCallback(async (message, sessionId = null, attachments = []) => {
     setIsSending(true);
     setError(null);
 
@@ -166,6 +167,7 @@ export default function useChat() {
 
     try {
       const body = { message };
+      if (attachments && attachments.length > 0) body.attachments = attachments;
       if (sessionId) body.session_id = sessionId;
 
       const res = await fetchWithAuth(`/conversations`, {
@@ -405,6 +407,53 @@ export default function useChat() {
     setError(null);
   }, []);
 
+  // ──────── UPLOAD ATTACHMENT ────────
+  const uploadAttachment = useCallback(async (file, sessionId) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('session_id', sessionId);
+      
+      const res = await fetchWithAuth(`/attachments/upload`, {
+        method: 'POST',
+        body: formData,
+        // fetch will automatically set the Content-Type boundary for FormData
+      });
+
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      console.error("Upload error:", err);
+      throw err;
+    }
+  }, [fetchWithAuth]);
+
+  // ──────── DOWNLOAD ATTACHMENT ────────
+  const downloadAttachment = useCallback(async (attachmentId) => {
+    try {
+      const res = await fetchWithAuth(`/attachments/${attachmentId}/download`);
+      if (!res.ok) throw new Error(`Failed to get download URL: ${res.status}`);
+      const data = await res.json();
+      // Open the SAS URL in a new tab to download the file
+      window.open(data.download_url, '_blank');
+    } catch (err) {
+      console.error("Download error:", err);
+      alert("Failed to download attachment: " + err.message);
+    }
+  }, [fetchWithAuth]);
+
+  // ──────── DELETE ATTACHMENT ────────
+  const deleteAttachment = useCallback(async (attachmentId) => {
+    try {
+      const res = await fetchWithAuth(`/attachments/${attachmentId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`Failed to delete attachment: ${res.status}`);
+      return true;
+    } catch (err) {
+      console.error("Delete error:", err);
+      return false;
+    }
+  }, [fetchWithAuth]);
+
   // ──────── CLEAR ERROR ────────
   const clearError = useCallback(() => setError(null), []);
 
@@ -430,6 +479,9 @@ export default function useChat() {
     deleteMessage,
     updateMessage,
     startNewChat,
+    uploadAttachment,
+    downloadAttachment,
+    deleteAttachment,
     clearError,
     setActiveSessionId,
     togglePin,

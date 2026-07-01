@@ -1,4 +1,5 @@
 import logging
+from typing import AsyncGenerator
 
 from langchain_core.messages import HumanMessage
 from langchain_ollama import ChatOllama
@@ -49,6 +50,19 @@ class AzureAgentService:
             return result.content
         except Exception as e:
             logger.error(f"Failed to generate chat response: {e}")
+            raise e
+
+    async def stream_chat(self, prompt: str) -> AsyncGenerator[str, None]:
+        """
+        Streams the chat response from the LLM token by token.
+        """
+        logger.info(f"Starting chat stream with prompt length: {len(prompt)}")
+        try:
+            async for chunk in self.model.astream(prompt):
+                yield chunk.content
+            logger.info("Successfully completed chat stream")
+        except Exception as e:
+            logger.error(f"Failed to stream chat response: {e}")
             raise e
 
 azure_agent_service = AzureAgentService()

@@ -42,12 +42,6 @@ async def conversation(request: AgentRequest, container: cosmos.ContainerProxy =
     persists the exchange to the conversation history, and returns the response.
     """
     logger.info(f"Received new chat message from user {current_user.id} for session {request.session_id}")
-    loop = asyncio.get_running_loop()
-    response = await loop.run_in_executor(None, azure_agent_service.run_chat, request.message)
-    
-    input_tokens = count_tokens(request.message)
-    output_tokens = count_tokens(response)
-    
     session_id = request.session_id or uuid.uuid4()
     logger.info(f"Incoming request.session_id: {request.session_id}, final session_id: {session_id}")
     
@@ -62,27 +56,41 @@ async def conversation(request: AgentRequest, container: cosmos.ContainerProxy =
         
         # Save user message
         await azure_cosmos_db_service.add_message(
-            container, session_id=session_id, user_id=current_user.id, role="user", content=request.message, sequence_number=seq
-        )
-        
-        # Save assistant message
-        await azure_cosmos_db_service.add_message(
-            container, session_id=session_id, user_id=current_user.id, role="assistant", content=response, sequence_number=seq+1
+            container, session_id=session_id, user_id=current_user.id, role="user", content=request.message, sequence_number=seq, attachments=request.attachments
         )
     except Exception as e:
-        logger.error(f"Failed to persist conversation history: {str(e)}", exc_info=True)
+        logger.error(f"Failed to persist user message: {str(e)}", exc_info=True)
+        # We might not have seq if it failed early
+        seq = 0
 
 
     async def generate_stream():
-        chunk_size = 100
-        for i in range(0, len(response), chunk_size):
-            chunk = response[i:i+chunk_size]
-            yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-            await asyncio.sleep(0.01)
+        full_response = ""
+        input_tokens = count_tokens(request.message)
+        
+        try:
+            async for chunk in azure_agent_service.stream_chat(request.message):
+                if chunk:
+                    full_response += chunk
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+        except Exception as e:
+            logger.error(f"Error during LLM stream: {e}", exc_info=True)
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            return
+            
+        output_tokens = count_tokens(full_response)
+        
+        # Save assistant message now that response is complete
+        try:
+            await azure_cosmos_db_service.add_message(
+                container, session_id=session_id, user_id=current_user.id, role="assistant", content=full_response, sequence_number=seq+1
+            )
+        except Exception as e:
+            logger.error(f"Failed to persist assistant message: {str(e)}", exc_info=True)
             
         final_data = {
             "done": True,
-            "response": response,
+            "response": full_response,
             "input_token": input_tokens,
             "output_token": output_tokens,
             "total_token": input_tokens + output_tokens,
@@ -259,44 +267,47 @@ async def update_message(
         )
 
     # Otherwise, it's a user message: run LLM and stream the response
-    loop = asyncio.get_running_loop()
-    new_response = await loop.run_in_executor(None, azure_agent_service.run_chat, content)
-    
-    # We need to find the corresponding AI message and update its content
-    try:
-        seq = updated_message.get("sequence_number", 0)
-        session_id = updated_message.get("session_id")
-        query = "SELECT * FROM c WHERE c.type = 'message' AND c.session_id = @session_id AND c.sequence_number = @seq AND c.role = 'assistant'"
-        parameters = [
-            {"name": "@session_id", "value": session_id},
-            {"name": "@seq", "value": seq + 1}
-        ]
-        
-        ai_msg_to_update = None
-        async for doc in container.query_items(query=query, parameters=parameters, partition_key=str(current_user.id)):
-            ai_msg_to_update = doc
-            break
-            
-        if ai_msg_to_update:
-            ai_msg_to_update["content"] = new_response
-            await container.replace_item(item=ai_msg_to_update["id"], body=ai_msg_to_update)
-        else:
-            await azure_cosmos_db_service.add_message(
-                container, session_id=session_id, user_id=current_user.id, role="assistant", content=new_response, sequence_number=seq+1
-            )
-    except Exception as e:
-        logger.error(f"Failed to update corresponding AI message: {e}")
-
     async def generate_stream():
-        chunk_size = 4
-        for i in range(0, len(new_response), chunk_size):
-            chunk = new_response[i:i+chunk_size]
-            yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-            await asyncio.sleep(0.01)
+        full_response = ""
+        
+        try:
+            async for chunk in azure_agent_service.stream_chat(content):
+                if chunk:
+                    full_response += chunk
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+        except Exception as e:
+            logger.error(f"Error during LLM stream in update: {e}", exc_info=True)
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            return
             
+        # We need to find the corresponding AI message and update its content
+        try:
+            seq = updated_message.get("sequence_number", 0)
+            session_id_str = updated_message.get("session_id")
+            query = "SELECT * FROM c WHERE c.type = 'message' AND c.session_id = @session_id AND c.sequence_number = @seq AND c.role = 'assistant'"
+            parameters = [
+                {"name": "@session_id", "value": session_id_str},
+                {"name": "@seq", "value": seq + 1}
+            ]
+            
+            ai_msg_to_update = None
+            async for doc in container.query_items(query=query, parameters=parameters, partition_key=str(current_user.id)):
+                ai_msg_to_update = doc
+                break
+                
+            if ai_msg_to_update:
+                ai_msg_to_update["content"] = full_response
+                await container.replace_item(item=ai_msg_to_update["id"], body=ai_msg_to_update)
+            else:
+                await azure_cosmos_db_service.add_message(
+                    container, session_id=session_id_str, user_id=current_user.id, role="assistant", content=full_response, sequence_number=seq+1
+                )
+        except Exception as e:
+            logger.error(f"Failed to update corresponding AI message: {e}")
+
         final_data = {
             "done": True,
-            "response": new_response,
+            "response": full_response,
             "humanMessage": content,
             "id": str(message_id)
         }

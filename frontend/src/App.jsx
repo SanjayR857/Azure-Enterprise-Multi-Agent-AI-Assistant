@@ -40,6 +40,9 @@ function MainApp() {
     deleteMessage,
     updateMessage,
     startNewChat,
+    uploadAttachment,
+    downloadAttachment,
+    deleteAttachment,
     togglePin,
   } = useChat();
 
@@ -120,8 +123,8 @@ function MainApp() {
   }, [messages, isSending]);
 
   // Handle sending a message
-  const handleSend = async (text) => {
-    await sendMessage(text, activeSessionId);
+  const handleSend = async (text, attachments = [], tempSessionId = null) => {
+    await sendMessage(text, tempSessionId || activeSessionId, attachments);
   };
 
   // Handle selecting a session
@@ -219,6 +222,7 @@ function MainApp() {
                     index={idx} 
                     onDelete={deleteMessage} 
                     onEdit={updateMessage} 
+                    onDownloadAttachment={downloadAttachment}
                   />
                 ))}
               </>
@@ -231,6 +235,9 @@ function MainApp() {
             onSend={handleSend}
             isSending={isSending}
             hasMessages={messages.length > 0}
+            uploadAttachment={uploadAttachment}
+            deleteAttachment={deleteAttachment}
+            activeSessionId={activeSessionId}
           />
         </div>
       </main>

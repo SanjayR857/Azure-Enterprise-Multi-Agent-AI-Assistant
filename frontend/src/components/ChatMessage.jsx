@@ -4,10 +4,11 @@ import MarkdownRenderer from './MarkdownRenderer';
 /**
  * Renders a single chat exchange (user question + AI response).
  */
-export default function ChatMessage({ message, onDelete, onEdit, index }) {
+export default function ChatMessage({ message, onDelete, onEdit, onDownloadAttachment, index }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editText, setEditText] = useState(message.humanMessage);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const formatTime = (dateStr) => {
     if (!dateStr) return '';
@@ -73,7 +74,33 @@ export default function ChatMessage({ message, onDelete, onEdit, index }) {
                   </div>
                 </div>
               ) : (
-                <p>{message.humanMessage}</p>
+                <>
+                  <p>{message.humanMessage}</p>
+                  {message.attachments && message.attachments.length > 0 && (
+                    <div className="message-attachments" style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                      {message.attachments.map(att => (
+                        <button
+                          key={att.id}
+                          onClick={() => onDownloadAttachment(att.id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.1)',
+                            border: '1px solid rgba(255,255,255,0.2)', color: 'inherit', padding: '6px 10px',
+                            borderRadius: '6px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                          {att.filename}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
             {!isEditing && (
@@ -97,6 +124,31 @@ export default function ChatMessage({ message, onDelete, onEdit, index }) {
           <div className="message-content-wrapper">
             <div id={`ai-msg-${index}`} className={`message-bubble ai-bubble ${message.isError ? 'error-bubble' : ''}`}>
               <MarkdownRenderer content={message.aiMessage} />
+              
+              {message.attachments && message.attachments.length > 0 && (
+                <div className="message-attachments" style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                  {message.attachments.map(att => (
+                    <button
+                      key={att.id}
+                      onClick={() => onDownloadAttachment(att.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', background: '#374151',
+                        border: '1px solid #4b5563', color: '#f3f4f6', padding: '6px 10px',
+                        borderRadius: '6px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#4b5563'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = '#374151'}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      {att.filename}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="message-meta ai-meta">
               {message.model && (
@@ -126,28 +178,104 @@ export default function ChatMessage({ message, onDelete, onEdit, index }) {
               )}
               <span className="ai-meta-item highlight">message</span>
               
-              <button className="icon-btn" onClick={() => {
-                const el = document.getElementById(`ai-msg-${index}`);
-                if (el) {
-                  navigator.clipboard.writeText(el.innerText);
-                } else {
-                  navigator.clipboard.writeText(message.aiMessage);
-                }
-              }} title="Copy">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
+              <div style={{ position: 'relative' }}>
+                <button 
+                  className="icon-btn" 
+                  onClick={() => setIsMenuOpen(!isMenuOpen)} 
+                  title="More options"
+                  style={{ marginLeft: '4px' }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="1"></circle>
+                    <circle cx="12" cy="5" r="1"></circle>
+                    <circle cx="12" cy="19" r="1"></circle>
+                  </svg>
+                </button>
 
-              <button className="icon-btn" onClick={() => onDelete && onDelete(message.id)} title="Delete">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                  <line x1="10" y1="11" x2="10" y2="17"></line>
-                  <line x1="14" y1="11" x2="14" y2="17"></line>
-                </svg>
-              </button>
+                {isMenuOpen && (
+                  <div 
+                    style={{ 
+                      position: 'absolute', 
+                      bottom: '100%', 
+                      right: '0', 
+                      marginBottom: '8px',
+                      background: '#374151',
+                      border: '1px solid #4b5563',
+                      borderRadius: '8px',
+                      padding: '4px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                      zIndex: 50,
+                      width: 'max-content'
+                    }}
+                  >
+                    <button 
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        const el = document.getElementById(`ai-msg-${index}`);
+                        if (el) {
+                          navigator.clipboard.writeText(el.innerText);
+                        } else {
+                          navigator.clipboard.writeText(message.aiMessage);
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#f3f4f6',
+                        cursor: 'pointer',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        width: '100%',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#4b5563'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}>
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                      Copy Message
+                    </button>
+
+                    <button 
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        onDelete && onDelete(message.id);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        width: '100%',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        transition: 'background 0.2s',
+                        marginTop: '2px'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#4b5563'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}>
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                      </svg>
+                      Delete Message
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

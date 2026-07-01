@@ -160,7 +160,8 @@ class AzureCosmosDBService:
         user_id: uuid.UUID,
         role: str, 
         content: str, 
-        sequence_number: int
+        sequence_number: int,
+        attachments: list[dict] | None = None
     ) -> dict:
         logger.info(f"Adding {role} message to session {session_id} (seq: {sequence_number})")
         message_doc = {
@@ -171,6 +172,7 @@ class AzureCosmosDBService:
             "role": role,
             "content": content,
             "sequence_number": sequence_number,
+            "attachments": attachments,
             "created_at": datetime.utcnow().isoformat()
         }
         

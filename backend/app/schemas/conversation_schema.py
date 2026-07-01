@@ -5,6 +5,7 @@ from uuid import UUID
 class AgentRequest(BaseModel):
     session_id: UUID | None = Field(None, alias="sessionId")
     message: str
+    attachments: list[dict] | None = Field(None, description="List of attached files")
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -14,6 +15,7 @@ class ConversationMessageCreate(BaseModel):
     session_id: UUID = Field(..., alias="sessionId")
     human_message: str = Field(..., alias="humanMessage")
     ai_message: str | None = Field(None, alias="aiMessage")
+    attachments: list[dict] | None = Field(None, description="List of attached files")
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -24,6 +26,7 @@ class ConversationMessageResponse(BaseModel):
     session_id: UUID = Field(..., alias="sessionId")
     human_message: str = Field(..., alias="humanMessage")
     ai_message: str | None = Field(None, alias="aiMessage")
+    attachments: list[dict] | None = Field(None, description="List of attached files")
     created_at: datetime = Field(..., alias="createdAt", description="Creation timestamp")
     
     model_config = ConfigDict(
@@ -34,11 +37,13 @@ class ConversationMessageResponse(BaseModel):
 class ConversationMessageUpdate(BaseModel):
     human_message: str | None = Field(None, alias="humanMessage", description="Updated human message")
     ai_message: str | None = Field(None, alias="aiMessage", description="Updated AI message")
+    attachments: list[dict] | None = Field(None, description="Updated attachments")
 
 
 class MessageDetails(BaseModel):
     human_message: str = Field(..., validation_alias="humanMessage", serialization_alias="humanMessage")
     ai_message: str | None = Field(None, validation_alias="aiMessage", serialization_alias="aiMessage")
+    attachments: list[dict] | None = Field(None, description="List of attached files")
     created_at: datetime = Field(..., validation_alias="createdAt", serialization_alias="createdAt")
 
     model_config = ConfigDict(

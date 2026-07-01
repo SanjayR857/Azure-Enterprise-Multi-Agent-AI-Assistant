@@ -89,6 +89,12 @@ class Settings(BaseSettings):
     LOG_FILE_PATH: str = os.getenv("LOG_FILE_PATH", "logs/app.log")
     LOG_FILE_MAX_BYTES: int = int(os.getenv("LOG_FILE_MAX_BYTES", "10485760"))
     LOG_FILE_BACKUP_COUNT: int = int(os.getenv("LOG_FILE_BACKUP_COUNT", "5"))
+    
+    # Attachments
+    ALLOWED_ATTACHMENT_EXTENSIONS: set[str] = {'.pdf', '.png', '.jpg', '.jpeg', '.mp4', '.mov', '.txt', '.csv'}
+    ALLOWED_ATTACHMENT_MIME_TYPES: set[str] = {'application/pdf', 'image/png', 'image/jpeg', 'video/mp4', 'video/quicktime', 'text/plain', 'text/csv'}
+    MAX_ATTACHMENT_SIZE_MB: int = 10
+    STORAGE_ACCOUNT_NAME: str = os.getenv("STORAGE_ACCOUNT_NAME", "")
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
