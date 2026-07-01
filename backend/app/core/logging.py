@@ -133,6 +133,7 @@ def setup_logging() -> None:
     from app.core.config import settings
     if settings.APPLICATIONINSIGHTS_CONNECTION_STRING:
         try:
+            # pyrefly: ignore [missing-import]
             from azure.monitor.opentelemetry import configure_azure_monitor
             configure_azure_monitor(connection_string=settings.APPLICATIONINSIGHTS_CONNECTION_STRING)
             print("Azure Monitor OpenTelemetry configured.")
