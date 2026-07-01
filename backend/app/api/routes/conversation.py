@@ -11,11 +11,9 @@ from app.api.dependencies.auth import validate_user
 from app.schemas.user_schema import User
 from app.schemas.conversation_schema import (
     AgentRequest,
-    ConversationMessageCreate,
     ConversationMessageUpdate,
     ConversationMessageResponse,
     SessionHistoryResponse,
-    PaginatedSessionHistoryResponse,
     AllSessionsResponse,
     MessageDetails
 )

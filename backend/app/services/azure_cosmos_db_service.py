@@ -113,29 +113,6 @@ class AzureCosmosDBService:
             logger.error(f"Failed to count messages for session {session_id}: {e}")
             return 0
 
-    async def get_all_sessions_and_messages(self, container: cosmos.ContainerProxy, user_id: uuid.UUID) -> tuple[list[dict], list[dict]]:
-        """Retrieve all sessions and all standalone messages for the user efficiently."""
-        logger.info(f"Retrieving all sessions and messages for user {user_id}")
-        try:
-            query = "SELECT * FROM c WHERE c.type IN ('session', 'message') AND c.user_id = @user_id"
-            parameters = [{"name": "@user_id", "value": str(user_id)}]
-            
-            sessions = []
-            messages = []
-            
-            async for item in container.query_items(query=query, parameters=parameters, partition_key=str(user_id)):
-                if item.get("type") == "session":
-                    sessions.append(item)
-                elif item.get("type") == "message":
-                    messages.append(item)
-            
-            # Sort sessions by created_at DESC
-            sessions.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-            logger.info(f"Retrieved {len(sessions)} sessions and {len(messages)} messages for user {user_id}")
-            return sessions, messages
-        except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to retrieve all sessions and messages: {e}")
-            return [], []
 
     async def get_all_sessions(self, container: cosmos.ContainerProxy, user_id: uuid.UUID) -> list[dict]:
         """Retrieve all session documents (metadata only, no messages) for the user."""
@@ -207,38 +184,6 @@ class AzureCosmosDBService:
             logger.error(f"Failed to delete session {session_id}: {e}")
             raise e
 
-    async def delete_message(self, container: cosmos.ContainerProxy, message_id: uuid.UUID, user_id: uuid.UUID) -> bool:
-        logger.info(f"Deleting message {message_id} for user {user_id}")
-        # Try deleting standalone message first
-        try:
-            await container.delete_item(item=str(message_id), partition_key=str(user_id))
-            logger.info(f"Successfully deleted standalone message {message_id}")
-            return True
-        except exceptions.CosmosResourceNotFoundError:
-            pass # Fall through to legacy embedded logic
-        except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to delete standalone message {message_id}: {e}")
-            
-        # Legacy embedded logic
-        logger.info(f"Falling back to legacy embedded logic for deleting message {message_id}")
-        try:
-            query = "SELECT * FROM c WHERE c.type = 'session' AND c.user_id = @user_id"
-            parameters = [{"name": "@user_id", "value": str(user_id)}]
-            
-            async for doc in container.query_items(query=query, parameters=parameters, partition_key=str(user_id)):
-                messages = doc.get("messages", [])
-                original_len = len(messages)
-                doc["messages"] = [m for m in messages if m.get("id") != str(message_id)]
-                
-                if len(doc["messages"]) < original_len:
-                    await container.replace_item(item=doc["id"], body=doc)
-                    logger.info(f"Successfully deleted embedded message {message_id} from session {doc['id']}")
-                    return True
-            logger.warning(f"Message {message_id} not found in embedded messages")
-            return False
-        except exceptions.CosmosHttpResponseError as e:
-            logger.error(f"Failed to delete embedded message {message_id}: {e}")
-            raise e
 
     async def update_message(
         self, 

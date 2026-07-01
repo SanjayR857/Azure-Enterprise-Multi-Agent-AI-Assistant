@@ -120,35 +120,6 @@ class AzureBlobStorageService:
             raise ex
 
 
-    async def update_file(self, container_name: str, blob_name: str, file_path: str) -> None:
-        """
-        Updates an existing file in the specified container safely in chunks.
-        """
-        try:
-            blob_client = self.service_client.get_blob_client(
-                container=container_name,
-                blob=blob_name
-            )
-            
-            # Ensure the blob exists before updating
-            exists = await blob_client.exists()
-            if not exists:
-                raise ResourceNotFoundError(f"The blob '{blob_name}' does not exist to be updated.")
-                
-            async def file_stream(f):
-                while True:
-                    chunk = await f.read(4096)
-                    if not chunk:
-                        break
-                    yield chunk
-
-            async with aiofiles.open(file=file_path, mode="rb") as f:
-                await blob_client.upload_blob(data=file_stream(f), overwrite=True)
-            logger.info(f"Successfully updated file: {blob_name}")
-        except AzureError as ex:
-            logger.exception(f"Failed to update file: {blob_name}")
-            raise ex
-
     async def generate_download_sas(self, container_name: str, blob_name: str, expiry_hours: int = 1) -> str:
         """
         Generates a temporary Shared Access Signature (SAS) URL for downloading a blob.

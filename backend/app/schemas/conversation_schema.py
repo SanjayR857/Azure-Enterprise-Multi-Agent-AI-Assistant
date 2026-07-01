@@ -11,15 +11,6 @@ class AgentRequest(BaseModel):
         populate_by_name=True,
     )
 
-class ConversationMessageCreate(BaseModel):
-    session_id: UUID = Field(..., alias="sessionId")
-    human_message: str = Field(..., alias="humanMessage")
-    ai_message: str | None = Field(None, alias="aiMessage")
-    attachments: list[dict] | None = Field(None, description="List of attached files")
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-    )
 
 class ConversationMessageResponse(BaseModel):
     id: UUID = Field(..., description="Message ID")
@@ -59,17 +50,6 @@ class SessionHistoryResponse(BaseModel):
         populate_by_name=True,
     )
 
-class PaginatedSessionHistoryResponse(BaseModel):
-    session_id: UUID = Field(..., alias="sessionId")
-    messages: dict[UUID, MessageDetails] = Field(..., description="Dictionary mapping message ID to message details")
-    total_messages: int = Field(..., alias="totalMessages", description="Total number of messages in this session")
-    limit: int = Field(..., description="Page size")
-    offset: int = Field(..., description="Current offset")
-    has_more: bool = Field(..., alias="hasMore", description="Whether more messages exist beyond this page")
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-    )
 
 class SessionDetails(BaseModel):
     """Metadata for a single chat session (no messages)."""
