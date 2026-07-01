@@ -69,7 +69,6 @@ app = FastAPI(
     },
 )
 
-
 # Enable CORS for frontend UI connection
 if settings.BACKEND_CORS_ORIGINS:
     app.add_middleware(
@@ -79,6 +78,9 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+from app.core.middleware import LoggingMiddleware
+app.add_middleware(LoggingMiddleware)
 
 app.include_router(api_router)
 

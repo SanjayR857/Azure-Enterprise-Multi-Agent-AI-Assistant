@@ -26,9 +26,9 @@ class AzureBlobStorageService:
                 account_url=self.account_url,
                 credential=cast(Any, self.credential)
             )
-            logger.info(f"Connected to Azure Blob Storage")
+            logger.info("Connected to Azure Blob Storage", extra={"account_url": self.account_url})
         except AzureError as ex:
-            logger.exception(f"Failed to connect to Azure Blob Storage: {ex}")
+            logger.exception("Failed to connect to Azure Blob Storage", extra={"account_url": self.account_url, "error": str(ex)})
             raise ex
 
     async def close(self) -> None:
@@ -62,9 +62,9 @@ class AzureBlobStorageService:
 
             async with aiofiles.open(file=file_path, mode="rb") as f:
                 await blob_client.upload_blob(data=file_stream(f), overwrite=True)
-            logger.info(f"Successfully uploaded file: {blob_name}")
+            logger.info("Successfully uploaded file", extra={"container_name": container_name, "blob_name": blob_name})
         except AzureError as ex:
-            logger.exception(f"Failed to upload file: {blob_name}")
+            logger.exception("Failed to upload file", extra={"container_name": container_name, "blob_name": blob_name, "error": str(ex)})
             raise ex
 
 
@@ -81,9 +81,9 @@ class AzureBlobStorageService:
             async with aiofiles.open(file=file_path, mode="wb") as f:
                 async for chunk in stream.chunks():
                     await f.write(chunk)
-            logger.info(f"Successfully downloaded file: {blob_name}")
+            logger.info("Successfully downloaded file", extra={"container_name": container_name, "blob_name": blob_name})
         except AzureError as ex:
-            logger.exception(f"Failed to download file: {blob_name}")
+            logger.exception("Failed to download file", extra={"container_name": container_name, "blob_name": blob_name, "error": str(ex)})
             raise ex
 
 
@@ -97,9 +97,9 @@ class AzureBlobStorageService:
                 blob=blob_name
             )
             await blob_client.delete_blob()
-            logger.info(f"Successfully deleted file: {blob_name}")
+            logger.info("Successfully deleted file", extra={"container_name": container_name, "blob_name": blob_name})
         except AzureError as ex:
-            logger.exception(f"Failed to delete file: {blob_name}")
+            logger.exception("Failed to delete file", extra={"container_name": container_name, "blob_name": blob_name, "error": str(ex)})
             raise ex
     
     async def list_files(self, container_name: str) -> list[str]:
@@ -113,10 +113,10 @@ class AzureBlobStorageService:
             blobs = []
             async for blob in blob_client.list_blobs():
                 blobs.append(blob.name)
-            logger.info(f"Successfully listed files in container: {container_name}")
+            logger.info("Successfully listed files in container", extra={"container_name": container_name})
             return blobs
         except AzureError as ex:
-            logger.exception(f"Failed to list files in container: {container_name}")
+            logger.exception("Failed to list files in container", extra={"container_name": container_name, "error": str(ex)})
             raise ex
 
 
@@ -155,7 +155,7 @@ class AzureBlobStorageService:
             # Construct and return the full URL
             return f"{self.account_url}/{container_name}/{blob_name}?{sas_token}"
         except AzureError as ex:
-            logger.exception(f"Failed to generate SAS token for {blob_name}")
+            logger.exception("Failed to generate SAS token", extra={"container_name": container_name, "blob_name": blob_name, "error": str(ex)})
             raise ex
 
 

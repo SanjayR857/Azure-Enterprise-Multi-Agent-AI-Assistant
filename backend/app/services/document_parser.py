@@ -27,7 +27,7 @@ vector_store = Chroma(
 
 class DocumentParserService:
     def extract_text(self, file_path: str, ext: str) -> str:
-        logger.info(f"Starting text extraction for {file_path} with extension {ext}")
+        logger.info("Starting text extraction", extra={"file_path": file_path, "extension": ext})
         text = ""
         try:
             if ext == ".pdf":
@@ -50,11 +50,11 @@ class DocumentParserService:
                 with open(file_path, "r", encoding="utf-8") as f:
                     text = f.read()
             else:
-                logger.warning(f"Unsupported extraction for {ext}")
+                logger.warning("Unsupported extraction", extra={"extension": ext, "file_path": file_path})
         except Exception as e:
-            logger.error(f"Error parsing {file_path}: {str(e)}")
+            logger.error("Error parsing document", extra={"file_path": file_path, "error": str(e)})
             
-        logger.info(f"Finished extracting text from {file_path}, total length: {len(text)}")
+        logger.info("Finished extracting text", extra={"file_path": file_path, "text_length": len(text)})
         return text
 
     async def process_and_index(self, db_document: dict):
@@ -62,14 +62,14 @@ class DocumentParserService:
         Extracts text from the physical file, chunks it, and saves to Vector DB.
         """
         original_filename = db_document["original_filename"]
-        logger.info(f"Starting process_and_index for document: {original_filename}")
+        logger.info("Starting process_and_index for document", extra={"original_filename": original_filename})
         # Get the extension
         ext = original_filename[original_filename.rfind("."):].lower()
         
         # 1. Extract raw text from the file
         raw_text = self.extract_text(db_document["storage_path"], ext)
         if not raw_text.strip():
-            logger.warning(f"No text extracted from {original_filename}")
+            logger.warning("No text extracted", extra={"original_filename": original_filename})
             return
 
         # 2. Chop the text into ~1000 character chunks with a 200 character overlap
@@ -95,6 +95,6 @@ class DocumentParserService:
         # 4. Embed and save to Chroma DB
         if docs:
             vector_store.add_documents(docs)
-            logger.info(f"Indexed {len(docs)} chunks for document {db_document['original_filename']}")
+            logger.info("Indexed chunks for document", extra={"original_filename": db_document['original_filename'], "chunk_count": len(docs)})
 
 document_parser = DocumentParserService()

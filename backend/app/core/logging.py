@@ -129,6 +129,19 @@ def setup_logging() -> None:
     # Apply configuration
     logging.config.dictConfig(logging_config)
     
+    # Configure Azure Application Insights if connection string exists
+    from app.core.config import settings
+    if settings.APPLICATIONINSIGHTS_CONNECTION_STRING:
+        try:
+            from azure.monitor.opentelemetry import configure_azure_monitor
+            configure_azure_monitor(connection_string=settings.APPLICATIONINSIGHTS_CONNECTION_STRING)
+            print("Azure Monitor OpenTelemetry configured.")
+        except ImportError:
+            print("WARNING: azure-monitor-opentelemetry is not installed. Application Insights integration is disabled.", file=sys.stderr)
+        except Exception as e:
+            print(f"WARNING: Failed to configure Azure Monitor OpenTelemetry: {str(e)}", file=sys.stderr)
+
+
     # Confirmation message
     root_logger = logging.getLogger()
     root_logger.info(
